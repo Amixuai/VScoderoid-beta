@@ -10,8 +10,8 @@ the target phone?
 
 1. `scripts/download-termux-tools.sh` now also fetches `proot` and `libtalloc`
    from Termux (signature-checked like the other packages). `libproot.so` and
-   `libproot-loader.so` land in `jniLibs/arm64-v8a`, `libtalloc.so.2` in
-   `assets/usr/lib`.
+   `libproot-loader.so` land in `jniLibs/arm64-v8a`, `libtalloc.so.2` and
+   `libandroid-shmem.so` (which `libproot.so` links) in `assets/usr/lib`.
 2. Build the app as usual and install it.
 
 ## Test on the phone
