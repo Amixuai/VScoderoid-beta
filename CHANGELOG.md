@@ -1,5 +1,6 @@
 ## Unreleased
 
+- proot prototype now defaults to Ubuntu 24.04 (glibc) instead of Alpine (musl): `bash ~/.vscodroid/proot-test.sh` (or `... alpine` to compare). Root filesystem is the official Ubuntu Base, checked against its `SHA256SUMS`.
 - Command wrapper no longer assumes which folders refuse symbolic links: it makes and removes a test link in the folder and acts only if that fails, so a later Android that allows links needs no change. New: `ln -s` / `ln` in such a folder makes a copy instead of failing. See `docs/SYMLINKS_ON_PUBLIC_STORAGE.md`.
 - After "All files access" is granted, a folder remembered from the old private default (`files/projects/...`) is no longer reopened; the editor opens `/storage/emulated/0/vscodroid`.
 - File > Open Folder, the Explorer's Open Folder button and the Welcome page now open the Android system folder picker (saf-bridge 1.11.1).
