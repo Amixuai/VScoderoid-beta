@@ -3427,6 +3427,15 @@ class MainActivity : AppCompatActivity() {
     private fun navigationIsOurs(): Boolean =
         appNavigation.consume(SystemClock.elapsedRealtime())
 
+    /** Whether [path] is inside the app-private default projects folder of older builds. */
+    private fun isLegacyPrivateProjectsPath(path: String): Boolean {
+        val legacyRoots = listOfNotNull(
+            File(filesDir, "projects").absolutePath,
+            getExternalFilesDir(null)?.let { File(it, "projects").absolutePath },
+        )
+        return legacyRoots.any { path == it || path.startsWith("$it/") }
+    }
+
     /**
      * The remembered workspace, when reopening it is still the right thing.
      *
@@ -3439,7 +3448,13 @@ class MainActivity : AppCompatActivity() {
      * editing in the belief that their work is reaching the device.
      */
     private fun rememberedWorkspaceFolder(): String? = rememberedFolderToReopen(
-        remembered = workspacePrefs.getString(KEY_LAST_FOLDER, null),
+        remembered = workspacePrefs.getString(KEY_LAST_FOLDER, null)
+            // The workspace lives in public storage once All files access is on.
+            // A folder remembered from the private default (`files/projects/...`)
+            // is the old location, and reopening it would keep every project, and
+            // every library installed in it, out of the file manager. Treated as
+            // nothing remembered, so the launch falls through to the public root.
+            ?.takeUnless { PublicStorage.hasAccess() && isLegacyPrivateProjectsPath(it) },
         mirrorsRoot = Environment.getSafMirrorsDir(this),
         // A directory or a `.code-workspace` file, because both are things the
         // workbench can be pointed back at and both are now remembered. The test

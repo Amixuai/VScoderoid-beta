@@ -135,6 +135,27 @@ function activate(context) {
         }
     );
 
+    // -- File > Open Folder, the Explorer's Open Folder button and the Welcome
+    // page's "Open Folder" all run the built-in commands below. On their own they
+    // show VS Code's web dialog, where a path has to be typed. Registering the
+    // same ids here sends them to the Android system folder picker instead, so
+    // choosing a folder is a tap, as on a PC. The handler registered last for an
+    // id is the one that runs, so this takes effect once the extension is active.
+    // "VSCodroid: Open Folder from Device" stays as it was.
+    const openFolderOverrides = [
+        'workbench.action.files.openFolder',
+        'workbench.action.files.openFileFolder',
+    ].map((id) => vscode.commands.registerCommand(id, async () => {
+        try {
+            await sendBridgeCommand('openFolderPicker');
+        } catch (/** @type {*} */ err) {
+            vscode.window.showWarningMessage(
+                `Failed to open folder picker: ${err.message}`
+            );
+        }
+    }));
+    context.subscriptions.push(...openFolderOverrides);
+
     // -- Open Recent Folder --
 
     const recentFolderCmd = vscode.commands.registerCommand(

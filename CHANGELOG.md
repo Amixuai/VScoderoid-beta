@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Command wrapper no longer assumes which folders refuse symbolic links: it makes and removes a test link in the folder and acts only if that fails, so a later Android that allows links needs no change. New: `ln -s` / `ln` in such a folder makes a copy instead of failing. See `docs/SYMLINKS_ON_PUBLIC_STORAGE.md`.
+- After "All files access" is granted, a folder remembered from the old private default (`files/projects/...`) is no longer reopened; the editor opens `/storage/emulated/0/vscodroid`.
+- File > Open Folder, the Explorer's Open Folder button and the Welcome page now open the Android system folder picker (saf-bridge 1.11.1).
 - proot prototype: `libproot.so`, `libproot-loader.so` and `libtalloc.so.2` are fetched from Termux by `scripts/download-termux-tools.sh`. `bash ~/.vscodroid/proot-test.sh` downloads Alpine Linux into private app storage and checks that `gcc hello.c` builds and runs inside it. Nothing is routed through proot yet. See `docs/PROOT_PROTOTYPE.md`.
 - Command wrapper wired in (`assets/command-wrapper.sh`): on Android, in a workspace on shared storage, `npm install` gets `--no-bin-links` automatically, package commands (`vite`, `tsc`...) keep working through `node_modules/.vscodroid-bins`, and `python -m venv <dir>` is created in app storage with an `activate` stub in `<dir>/bin`. Does nothing off Android (`VSCODROID_PLATFORM` is only set by the Android app) or outside shared storage.
 - Workspace moved to public storage (`/storage/emulated/0/vscodroid`), read and written with plain `java.io.File` (needs "All files access"). Falls back to private storage until granted.

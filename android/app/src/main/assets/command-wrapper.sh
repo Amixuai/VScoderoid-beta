@@ -2,8 +2,13 @@
 #
 # Lets you type ordinary developer commands (npm install, python -m venv ...)
 # and quietly adds what Android's shared storage needs. Shared storage (where
-# the workspace lives) is served through FUSE: it cannot hold symbolic links and
-# nothing in it can be executed.
+# the workspace lives) is served through FUSE: today it cannot hold symbolic
+# links and nothing in it can be executed.
+#
+# Nothing here is hard-wired to a particular Android version. Whether a folder
+# can hold links is ASKED OF THE FILESYSTEM (a link is made and removed in it),
+# so on a phone, or a later Android, where links work, every command below runs
+# exactly as typed.
 #
 #   * Android only. Anywhere else this file does nothing, so desktop builds run
 #     every command exactly as typed. The app sets VSCODROID_PLATFORM=android.
@@ -21,12 +26,45 @@ __vscodroid_wrap_loaded() { :; }
 
 # ---- helpers ---------------------------------------------------------------
 
-__vscodroid_is_shared() {
-  local pre
-  for pre in ${VSCODROID_SHARED_PREFIXES:-/storage /sdcard /mnt/sdcard /mnt/user /mnt/media_rw}; do
-    case "$1" in "$pre"|"$pre"/*) return 0 ;; esac
-  done
+# Nearest folder that exists, going up from a path that may not exist yet.
+__vscodroid_nearest_dir() {
+  local d=$1
+  [ -d "$d" ] || d=${d%/*}
+  while [ -n "$d" ] && [ ! -d "$d" ]; do d=${d%/*}; done
+  printf '%s' "${d:-/}"
+}
+
+declare -A __vscodroid_links_ok 2>/dev/null
+
+# Can a symbolic link be made in this folder? Asked by making one.
+# VSCODROID_SYMLINK_PROBE: "fail" or "ok" skip the question (for tests).
+__vscodroid_links_work() {
+  case "${VSCODROID_SYMLINK_PROBE-}" in fail) return 1 ;; ok) return 0 ;; esac
+  local d=$1 probe
+  if [ -n "${__vscodroid_links_ok[$d]+x}" ]; then
+    [ "${__vscodroid_links_ok[$d]}" = 1 ]
+    return $?
+  fi
+  probe="$d/.vscodroid-link-probe.$$"
+  if command ln -s . "$probe" 2>/dev/null; then
+    rm -f "$probe" 2>/dev/null
+    __vscodroid_links_ok[$d]=1
+    return 0
+  fi
+  __vscodroid_links_ok[$d]=0
   return 1
+}
+
+# True where links cannot be made. The folder names are only a cheap first
+# filter (so the app's own storage is never probed); the answer is the probe's.
+__vscodroid_is_shared() {
+  local pre named=1
+  for pre in ${VSCODROID_SHARED_PREFIXES:-/storage /sdcard /mnt/sdcard /mnt/user /mnt/media_rw}; do
+    case "$1" in "$pre"|"$pre"/*) named=0 ;; esac
+  done
+  [ $named -eq 0 ] || return 1
+  __vscodroid_links_work "$(__vscodroid_nearest_dir "$1")" && return 1
+  return 0
 }
 
 __vscodroid_cwd_shared() { __vscodroid_is_shared "$(pwd -P 2>/dev/null || pwd)"; }
@@ -215,3 +253,59 @@ for __n in python3 python; do
   fi
 done
 unset __n
+
+# ---- ln: copy where a link cannot be made --------------------------------------
+
+# `ln -s a b` (and `ln a b`) in a folder that cannot hold links would fail with
+# "Operation not permitted". There, the thing that was asked for is made as a
+# COPY instead, and one line says so. A copy is not a link: later changes to the
+# original do not show up in it. If the target does not exist yet (a link to
+# something created later) there is nothing to copy and the real error is shown.
+ln() {
+  if [ -n "${VSCODROID_NO_WRAP-}" ]; then command ln "$@"; return $?; fi
+  local __a __end=0 __force=0 __notd=0 __odd=0
+  local -a __pos=()
+  for __a in "$@"; do
+    if [ $__end -eq 0 ]; then
+      case "$__a" in
+        --) __end=1; continue ;;
+        --force) __force=1; continue ;;
+        --no-target-directory) __notd=1; continue ;;
+        --symbolic|--verbose|--interactive|--logical|--physical|--relative|--no-dereference) continue ;;
+        --*) __odd=1; continue ;;
+        -?*)
+          case "$__a" in *t*) __odd=1 ;; esac
+          case "$__a" in *f*) __force=1 ;; esac
+          case "$__a" in *T*) __notd=1 ;; esac
+          continue ;;
+      esac
+    fi
+    __pos+=("$__a")
+  done
+  local __out __st
+  __out=$(command ln "$@" 2>&1); __st=$?
+  if [ $__st -eq 0 ]; then [ -z "$__out" ] || printf '%s\n' "$__out"; return 0; fi
+  local __target __link __src
+  if [ $__odd -eq 1 ] || [ ${#__pos[@]} -lt 1 ] || [ ${#__pos[@]} -gt 2 ]; then
+    printf '%s\n' "$__out" >&2; return $__st
+  fi
+  __target=${__pos[0]}
+  __link=${__pos[1]:-${__target##*/}}
+  if [ -d "$__link" ] && [ $__notd -eq 0 ]; then __link="${__link%/}/${__target##*/}"; fi
+  local __ld=${__link%/*}; [ "$__ld" = "$__link" ] && __ld=.
+  if ! __vscodroid_is_shared "$(cd "$__ld" 2>/dev/null && pwd -P || printf '%s' "$__ld")"; then
+    printf '%s\n' "$__out" >&2; return $__st
+  fi
+  case "$__target" in /*) __src=$__target ;; *) __src="$__ld/$__target" ;; esac
+  if [ ! -e "$__src" ]; then printf '%s\n' "$__out" >&2; return $__st; fi
+  if [ -e "$__link" ] || [ -L "$__link" ]; then
+    if [ $__force -eq 1 ]; then rm -rf -- "$__link"
+    else echo "ln: failed to create link '$__link': File exists" >&2; return 1; fi
+  fi
+  if command cp -R -- "$__src" "$__link" 2>/dev/null; then
+    echo "vscodroid: this folder cannot hold links, so '$__link' is a copy of '$__target'" >&2
+    return 0
+  fi
+  printf '%s\n' "$__out" >&2
+  return $__st
+}
