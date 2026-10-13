@@ -91,7 +91,9 @@ class LaunchRepairWiringTest {
         "ensureToolchainEnvSourcing",
         "ensurePromptFix",
         "ensureStartupDirGuard",
+        "ensureCommandWrapper",
         "createBashEnvFile",
+        "ensureCommandWrapperSourcing",
         // Unordered with respect to its neighbours: pip.conf is its own file in
         // its own format and shares nothing with the shell writers. It is here
         // rather than at first run because that is what lets a changed
@@ -105,6 +107,7 @@ class LaunchRepairWiringTest {
         // there, so ahead of it a launch that had lost both would repair the
         // directory and leave the link for the launch after.
         "createStorageSymlinks",
+        "syncProjectsDirExport",
         "repairInstalledToolchains",
         "reclaimRevokedMirrors",
     )
