@@ -185,6 +185,7 @@ LIBRARIES = {
     "libandroid-support.so": ("libandroid-support", "Apache-2.0, MIT"),
     "libandroid-glob.so": ("libandroid-glob", "BSD-3-Clause"),
     "libandroid-posix-semaphore.so": ("libandroid-posix-semaphore", "MIT"),
+    "libandroid-shmem.so": ("libandroid-shmem", "BSD-3-Clause"),
     "libncursesw.so.6": ("ncurses", "MIT"),
     "libpanelw.so.6": ("ncurses", "MIT"),
     "libcurl.so": ("libcurl", "MIT"),

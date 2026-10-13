@@ -63,6 +63,11 @@ REQUIRED_PACKAGES=(
     # commands to it. See docs/PROOT_PROTOTYPE.md.
     proot
     libtalloc
+    # libproot.so names libandroid-shmem.so in DT_NEEDED (System V shared memory
+    # is not in Bionic). Without it beside the binary the loader refuses proot at
+    # dlopen time, and verifyBundledBinaries stops the build for exactly that.
+    # See docs/PROOT_PROTOTYPE.md.
+    libandroid-shmem
     # Node's own dependencies. It is fetched by download-node.sh, but its
     # libraries belong here: step 5 wipes assets/usr/lib before repopulating it,
     # so anything placed there by a later script would survive only by running
@@ -104,6 +109,7 @@ get_sonames() {
         krb5)              echo "libgssapi_krb5.so.2 libkrb5.so.3 libk5crypto.so.3 libkrb5support.so.0 libcom_err.so.3" ;;
         libresolv-wrapper) echo "libresolv_wrapper.so" ;;
         libtalloc)         echo "libtalloc.so.2" ;;
+        libandroid-shmem)  echo "libandroid-shmem.so" ;;
         c-ares)            echo "libcares.so" ;;
         # libicudata is the 32 MB data blob the other two are useless without.
         libicu)            echo "libicui18n.so.78 libicuuc.so.78 libicudata.so.78" ;;
@@ -119,7 +125,7 @@ LIB_PACKAGES=(
     libcurl openssl pcre2 libexpat
     libnghttp2 libnghttp3 libngtcp2 libssh2 zlib
     libevent utf8proc libandroid-glob libedit ldns
-    krb5 libresolv-wrapper libtalloc
+    krb5 libresolv-wrapper libtalloc libandroid-shmem
     c-ares libicu libc++ libsqlite
 )
 
