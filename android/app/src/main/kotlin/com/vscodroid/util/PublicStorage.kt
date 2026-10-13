@@ -88,7 +88,13 @@ object PublicStorage {
     }
 
     fun isUnderPublicStorage(path: String): Boolean {
-        val base = android.os.Environment.getExternalStorageDirectory().absolutePath
+        // Where the platform cannot name shared storage (a plain JVM unit test,
+        // where android.os.Environment is a stub that throws) nothing is under
+        // it, which is also the answer the callers want: they only act on a
+        // path that is.
+        val base = runCatching {
+            android.os.Environment.getExternalStorageDirectory().absolutePath
+        }.getOrNull() ?: return false
         return path == base || path.startsWith("$base/")
     }
 
