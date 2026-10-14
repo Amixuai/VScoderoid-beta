@@ -2041,7 +2041,7 @@ class FirstRunSetup(
      */
     fun ensureCommandWrapper() {
         // proot-test.sh is the proot prototype check; run it by hand from the terminal.
-        for (name in listOf("command-wrapper.sh", "bin-manifest.js", "proot-test.sh")) {
+        for (name in listOf("command-wrapper.sh", "bin-manifest.js", "proot-test.sh", "ubuntu-env.sh")) {
             if (!extractAssetFile(name, "home/.vscodroid/$name")) {
                 Logger.w(tag, "Could not write $name; commands run unmodified")
             }

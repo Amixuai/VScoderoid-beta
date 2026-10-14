@@ -309,3 +309,7 @@ ln() {
   printf '%s\n' "$__out" >&2
   return $__st
 }
+
+# ---- Ubuntu routing (gcc, g++, make, python, cargo, go, apt ...) ---------------
+# Defined last, so it can wrap the python functions above.
+[ -f "$HOME/.vscodroid/ubuntu-env.sh" ] && . "$HOME/.vscodroid/ubuntu-env.sh"

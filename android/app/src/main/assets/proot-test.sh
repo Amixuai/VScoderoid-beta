@@ -176,6 +176,9 @@ else
   fail "C did not build and run inside proot on this phone. Send the lines above, plus the Android version printed at the top, to the developer."
 fi
 
+# Remember which mode worked, so the app's commands start proot the same way.
+if [ "$MODE" = "default" ]; then rm -f "$HOME/.vscodroid/proot-mode"; else printf 'noseccomp\n' > "$HOME/.vscodroid/proot-mode"; fi
+
 say ""
 tail -n 3 "$LOG"
 say ""
