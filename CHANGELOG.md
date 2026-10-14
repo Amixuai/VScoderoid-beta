@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Default workspace is now the dot folder `/storage/emulated/0/.VSCodroid` (with `.nomedia`), so projects stay out of phone search. Folders opened before are reopened as they were.
+- After `npm start`, `npm run dev`, `python -m http.server` and similar, the dev server's address is opened in the phone's browser (`xdg-open` also works). Off with `VSCODROID_NO_PREVIEW=1`.
+- `ubuntu gui start|stop`: experimental virtual screen for Tkinter/Pygame, shown in the browser. See `docs/FINAL_5_PERCENT.md`.
 - Ubuntu routing: gcc, g++, make, cmake, python, pip, cargo, rustc, go, apt and dpkg now run inside the private Ubuntu system (proot) from the terminal, in the current workspace folder. `./prog` runs programs built in the workspace (through a private copy), `ubuntu` opens a shell there, `native cmd` bypasses it. See `docs/UBUNTU_ROUTING.md`.
 - proot prototype now defaults to Ubuntu 24.04 (glibc) instead of Alpine (musl): `bash ~/.vscodroid/proot-test.sh` (or `... alpine` to compare). Root filesystem is the official Ubuntu Base, checked against its `SHA256SUMS`.
 - Command wrapper no longer assumes which folders refuse symbolic links: it makes and removes a test link in the folder and acts only if that fails, so a later Android that allows links needs no change. New: `ln -s` / `ln` in such a folder makes a copy instead of failing. See `docs/SYMLINKS_ON_PUBLIC_STORAGE.md`.

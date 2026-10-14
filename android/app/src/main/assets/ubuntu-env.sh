@@ -46,6 +46,10 @@ __vscodroid_ub_exec() {
     envv+=("VIRTUAL_ENV=$VSCODROID_VENV"); gpath="$VSCODROID_VENV/bin:$gpath"
   fi
   envv+=("PATH=$gpath")
+  # While the graphical desktop runs (ubuntu gui start), programs draw on it.
+  if [ -f "$HOME/.vscodroid/gui.pid" ] && kill -0 "$(cat "$HOME/.vscodroid/gui.pid" 2>/dev/null)" 2>/dev/null; then
+    envv+=(DISPLAY=:1)
+  fi
   # Built programs cannot run from shared storage, so Rust's build folder stays
   # inside Ubuntu, one per project, unless the user chose one.
   if [ -n "${CARGO_TARGET_DIR-}" ]; then
@@ -216,13 +220,73 @@ case $- in
     fi ;;
 esac
 
+# ---- graphical programs (Tkinter, Pygame ...) --------------------------------
+# A virtual screen (Xtigervnc) and a small window manager run inside Ubuntu, and
+# noVNC shows that screen in a browser page on this phone (localhost:6080).
+# EXPERIMENTAL: needs a few hundred MB the first time.
+#
+#   ubuntu gui start    start the desktop and open it in the browser
+#   ubuntu gui open     open the page again
+#   ubuntu gui stop     stop it
+#   ubuntu gui status
+#
+# While it runs, routed commands such as `python3 game.py` draw on it.
+__vscodroid_ub_gui() {
+  local act=${1-status} root pidf pid url marker
+  root=$(__vscodroid_ub_root)
+  pidf="$HOME/.vscodroid/gui.pid"
+  url="http://localhost:6080/vnc.html?autoconnect=1&resize=scale"
+  pid=$(cat "$pidf" 2>/dev/null)
+  case "$act" in
+    start)
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "vscodroid: the desktop is already running"; __vscodroid_open_url "$url"; return 0
+      fi
+      marker="$root/var/lib/vscodroid/provisioned/gui"
+      if [ ! -f "$marker" ]; then
+        echo "vscodroid: first use of the graphical desktop: installing it into the Ubuntu system. This takes several minutes, once." >&2
+        if ! { __vscodroid_ub_exec apt-get update -qq &&
+               __vscodroid_ub_exec apt-get install -y -qq --no-install-recommends \
+                 tigervnc-standalone-server novnc websockify openbox xterm x11-utils python3-tk; }; then
+          echo "vscodroid: could not install the desktop (is the phone online?)" >&2; return 1
+        fi
+        mkdir -p "${marker%/*}" && : > "$marker"
+      fi
+      # One long-lived proot holds the screen and the web page; they end with it.
+      (
+        __vscodroid_ub_exec /bin/sh -c 'rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
+          Xtigervnc :1 -geometry 1280x720 -depth 24 -SecurityTypes None -localhost -rfbport 5901 >/tmp/vnc.log 2>&1 &
+          sleep 2
+          DISPLAY=:1 openbox >/tmp/openbox.log 2>&1 &
+          exec websockify --web /usr/share/novnc 6080 localhost:5901' >/dev/null 2>&1 &
+        echo $! > "$pidf"
+      )
+      sleep 4
+      if __vscodroid_open_url "$url"; then echo "vscodroid: the desktop is open in the browser"; else echo "vscodroid: the desktop is at $url"; fi
+      return 0 ;;
+    open) __vscodroid_open_url "$url" || echo "$url"; return 0 ;;
+    stop)
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null; rm -f "$pidf"; echo "vscodroid: the desktop is stopped"; else rm -f "$pidf"; echo "vscodroid: the desktop is not running"; fi
+      return 0 ;;
+    status)
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "running ($url)"; else echo "not running"; fi
+      return 0 ;;
+    *) echo "usage: ubuntu gui start|open|stop|status" >&2; return 2 ;;
+  esac
+}
+
 ubuntu() {
   case "${1-}" in
     setup) bash "$HOME/.vscodroid/proot-test.sh" ubuntu; return $? ;;
+    gui)
+      shift
+      if ! __vscodroid_ub_ready; then echo "vscodroid: the Ubuntu system is not installed yet. Run:  ubuntu setup" >&2; return 1; fi
+      __vscodroid_ub_gui "$@"; return $? ;;
     help|-h|--help)
       echo "ubuntu            open a shell inside the Ubuntu system"
       echo "ubuntu CMD ...    run CMD there (ubuntu ./hello runs a built program)"
       echo "ubuntu setup      install the Ubuntu system (once)"
+      echo "ubuntu gui start  graphical desktop for Tkinter/Pygame (experimental)"
       echo "native CMD ...    run CMD on the phone itself, not in Ubuntu"
       return 0 ;;
   esac

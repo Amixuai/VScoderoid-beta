@@ -33,3 +33,22 @@ version of the command (python, make), the phone's version runs instead.
 - **Opt out.** `VSCODROID_NO_UBUNTU=1 cmd` or `native cmd` runs the phone's own
   command.
 - **Setup.** `ubuntu setup` installs the Ubuntu system (same as the test script).
+
+## Graphical programs (Tkinter, Pygame) - experimental
+
+`ubuntu gui start` installs a virtual screen (Xtigervnc), a window manager
+(openbox) and noVNC inside Ubuntu, starts them, and opens the screen in the
+phone's browser at `http://localhost:6080`. While it runs, `python3 game.py` and
+other routed commands draw on it. `ubuntu gui stop` ends it. It needs a few
+hundred MB the first time. It is not shown inside a VS Code tab yet; the page
+opens in the browser.
+
+## Opening a dev server
+
+After `npm start`, `npm run dev|serve|preview`, `python -m http.server` and
+`manage.py runserver`, the likely ports (or the one named with `--port`/`PORT`)
+are tried once a second for two minutes; the first that starts answering is
+opened in the phone's browser through Android's VIEW intent. A port that was
+already answering is ignored. `VSCODROID_NO_PREVIEW=1` turns it off; `xdg-open
+<address>` opens an address by hand.
+

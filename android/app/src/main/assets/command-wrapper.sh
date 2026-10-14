@@ -313,3 +313,109 @@ ln() {
 # ---- Ubuntu routing (gcc, g++, make, python, cargo, go, apt ...) ---------------
 # Defined last, so it can wrap the python functions above.
 [ -f "$HOME/.vscodroid/ubuntu-env.sh" ] && . "$HOME/.vscodroid/ubuntu-env.sh"
+
+# ---- Open the browser for a dev server ----------------------------------------
+# VS Code normally spots a running server by reading /proc/net/tcp, which Android
+# has closed to apps, so nothing opens by itself. After `npm start`, `npm run dev`
+# and friends (and `python -m http.server`, `manage.py runserver`), the likely
+# ports are tried once a second; the first one that starts answering (and was not
+# answering before the command began) is opened in the phone's browser.
+#
+#   VSCODROID_NO_PREVIEW=1   turns this off
+#   VSCODROID_OPEN_CMD=...   how a page is opened (default: Android's VIEW intent)
+#   xdg-open <web address>   opens an address by hand
+
+__vscodroid_open_url() {
+  [ -z "${VSCODROID_NO_PREVIEW-}" ] || return 1
+  if [ -n "${VSCODROID_OPEN_CMD-}" ]; then ${VSCODROID_OPEN_CMD} "$1"; return $?; fi
+  command -v am >/dev/null 2>&1 || return 1
+  am start -a android.intent.action.VIEW -d "$1" >/dev/null 2>&1
+}
+
+xdg-open() {
+  case "${1-}" in
+    http://*|https://*) __vscodroid_open_url "$1" || { printf '%s\n' "$1"; return 1; } ;;
+    *) echo "vscodroid: only web addresses can be opened from the terminal" >&2; return 1 ;;
+  esac
+}
+
+__vscodroid_port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+# The port named in a command line (--port 4000, --port=4000, -p 4000), if any.
+__vscodroid_port_arg() {
+  local prev="" a
+  for a in "$@"; do
+    case "$a" in --port=*) a=${a#--port=}; case "$a" in ''|*[!0-9]*) ;; *) printf '%s' "$a"; return 0 ;; esac ;; esac
+    case "$prev" in
+      --port|-p) case "$a" in ''|*[!0-9]*) ;; *) printf '%s' "$a"; return 0 ;; esac ;;
+    esac
+    prev=$a
+  done
+  return 1
+}
+
+__vscodroid_preview_watch() {
+  local waited=0 p
+  while [ $waited -lt "${VSCODROID_PREVIEW_SECONDS:-120}" ]; do
+    for p in "$@"; do
+      if __vscodroid_port_open "$p"; then
+        if __vscodroid_open_url "http://localhost:$p"; then
+          echo "vscodroid: opened http://localhost:$p in the browser" >&2
+        else
+          echo "vscodroid: your app is running at http://localhost:$p" >&2
+        fi
+        return 0
+      fi
+    done
+    sleep 1; waited=$((waited + 1))
+  done
+}
+
+# __vscodroid_with_preview "default ports" command args...
+__vscodroid_with_preview() {
+  local ports=$1 p hint; shift
+  if [ -n "${VSCODROID_NO_PREVIEW-}" ]; then "$@"; return $?; fi
+  hint=$(__vscodroid_port_arg "$@")
+  [ -n "$hint" ] || case "${PORT-}" in ''|*[!0-9]*) ;; *) hint=$PORT ;; esac
+  [ -n "$hint" ] && ports=$hint
+  local -a fresh=()
+  for p in $ports; do __vscodroid_port_open "$p" || fresh+=("$p"); done
+  if [ ${#fresh[@]} -gt 0 ]; then
+    ( __vscodroid_preview_watch "${fresh[@]}" & ) >/dev/null 2>&1
+  fi
+  "$@"
+}
+
+# Keep what npm, python3 and python are now (they may already be wrappers).
+for __n in npm python3 python; do
+  if declare -F "$__n" >/dev/null 2>&1; then
+    eval "$(declare -f "$__n" | sed "1s/^$__n *()/__vscodroid_pv_$__n ()/")"
+  else
+    eval "__vscodroid_pv_$__n() { command $__n \"\$@\"; }"
+  fi
+done
+unset __n
+
+npm() {
+  case "${1-}:${2-}" in
+    start:*|run:start|run:dev|run:serve|run:preview|run:develop|run-script:start|run-script:dev)
+      __vscodroid_with_preview "3000 5173 4173 8080 4200 3001 5174" __vscodroid_pv_npm "$@" ;;
+    *) __vscodroid_pv_npm "$@" ;;
+  esac
+}
+
+__vscodroid_py_preview() {
+  local n=$1 a port=8000; shift
+  case "${1-} ${2-}" in
+    "-m http.server")
+      for a in "${@:3}"; do case "$a" in ''|*[!0-9]*) ;; *) port=$a ;; esac; done
+      __vscodroid_with_preview "$port" "__vscodroid_pv_$n" "$@"; return $? ;;
+  esac
+  case "${1-}:${2-}" in
+    manage.py:runserver|*/manage.py:runserver)
+      __vscodroid_with_preview 8000 "__vscodroid_pv_$n" "$@"; return $? ;;
+  esac
+  "__vscodroid_pv_$n" "$@"
+}
+python3() { __vscodroid_py_preview python3 "$@"; }
+python() { __vscodroid_py_preview python "$@"; }
