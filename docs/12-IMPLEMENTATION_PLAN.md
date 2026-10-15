@@ -2713,3 +2713,15 @@ Every task is "done" when:
 | Dev environment         | [CONTRIBUTING](../CONTRIBUTING.md)                | Setup, Assets, Building    |
 | Release process         | [10-RELEASE_PLAN](./10-RELEASE_PLAN.md)           | §1-§6                      |
 | Milestone criteria      | [MILESTONES](../MILESTONES.md)                    | All                        |
+
+---
+
+## Work added after this plan (2026-10)
+
+Not part of the week-by-week plan above; recorded so the plan does not read as complete or as silent.
+Status per item is in [FEATURE_STATUS](./FEATURE_STATUS.md).
+
+- Public-storage workspace with All files access, `.nomedia`, native folder picker.
+- Terminal command wrapper for the missing symbolic links, and Ubuntu (proot) routing for compilers and runtimes.
+- Dev-server browser opening; experimental `ubuntu gui`.
+

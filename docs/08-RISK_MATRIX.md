@@ -316,3 +316,14 @@ The decisions these risks settled, and what each one buys:
 | ptyHost as a `worker_thread` (`patches/0003`), one bash per terminal | T01 | Keeps the terminal host off the phantom count while every terminal keeps a real PTY |
 | Core binaries shipped as `.so` in `jniLibs`, toolchains never in the APK | P01, P02 | Extraction with the execute bit is the only supported route, and SELinux refuses `execve` under the data directory |
 | Open VSX, not Microsoft Marketplace | L01 | Microsoft's Marketplace terms do not permit third-party clients |
+
+## Added 2026-10-15
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| Play rejects the All files access declaration | Medium | High | Prepared answers in [PLAY_STORE_ALL_FILES_ACCESS](./PLAY_STORE_ALL_FILES_ACCESS.md); fall back to a build without the permission that uses the SAF mirror |
+| A future Android restricts proot or all-files access | Medium | High | Capability checks ask the system instead of assuming a version; the Ubuntu routing falls back to the phone's own commands where they exist |
+| proot is slow or fails on a device | Medium | Medium | `proot-test.sh` reports the cause; `PROOT_NO_SECCOMP` retry; `native cmd` bypass |
+| Project files turn up in phone-wide search | High | Low | `.nomedia` covers the media scanner only; not solved for every search app (see FINAL_5_PERCENT) |
+| Ubuntu system needs hundreds of MB | Certain | Low | Installed on first use only; stored privately; removable |
+

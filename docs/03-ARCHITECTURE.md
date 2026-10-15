@@ -526,6 +526,26 @@ permission and no other app can browse either (Android 11 closed `Android/data`)
 Data wipes both; the shared-storage one is also reachable over MTP and by a few OEM file
 managers. Work that has to survive either belongs in a folder opened through the SAF picker.
 
+**Superseded 2026-10-15.** The default workspace is `/storage/emulated/0/vscodroid` again, now with
+`MANAGE_EXTERNAL_STORAGE` and the terminal layers below that deal with the missing links:
+
+- `util/PublicStorage.kt` names the root, answers whether All files access is held, resolves a picked
+  tree URI to a real path, and puts an empty `.nomedia` in the workspace root. Files are written with
+  plain `java.io.File`; MediaStore is not used. `Environment.getProjectsDir` returns the public root
+  when access is held and the private folder otherwise.
+- The folder picker (`ACTION_OPEN_DOCUMENT_TREE`) result is turned into a path and opened directly,
+  with no mirror and no sync. A provider with no path (a cloud drive) still takes the SAF mirror
+  route. File > Open Folder and the long-press entry reach the picker through the saf-bridge
+  extension's command override and `MainActivity.injectOpenFolderGuard`.
+- `assets/command-wrapper.sh` (Android only, `VSCODROID_PLATFORM=android`) adds `--no-bin-links` to
+  `npm install`, moves Python virtual environments into private storage, and turns a refused
+  `ln` into a copy; it asks the filesystem whether links work before acting.
+- `assets/ubuntu-env.sh` routes gcc, g++, make, cmake, python, pip, cargo, rustc, go and apt into
+  an Ubuntu system run through `proot` (`libproot.so`, `libproot-loader.so`, `libtalloc.so.2`),
+  kept in `~/proot/ubuntu`. Programs built in shared storage run through a private copy.
+- After a dev server starts, the wrapper opens it in the phone's browser; `ubuntu gui start` shows a
+  virtual screen (experimental).
+
 ---
 
 ## 8. Cross-Cutting Concerns

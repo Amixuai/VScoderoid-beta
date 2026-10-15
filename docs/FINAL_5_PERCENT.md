@@ -2,34 +2,35 @@
 
 | Item | Status |
 |---|---|
-| Hide projects from phone search | Done: workspace root is `.VSCodroid` (dot folder) plus `.nomedia` |
+| Hide projects from phone search | **Not solved.** A dot folder was tried and removed; `.nomedia` covers the media scanner only |
 | Open the browser for a dev server | Done and tested with real servers |
 | Graphical programs (Tkinter/Pygame) | Written, NOT tested on a phone (`ubuntu gui`) |
-| Intel (x86_64) programs | Not built |
+| Intel (x86_64) programs | Built, experimental (`ubuntu x86`), not run on a phone |
 | USB / Arduino flashing | Not built |
 | Docker / containers | Not built; likely only a narrow subset is possible |
 
 ## Hiding projects from search
 
-The media scanner skips folders whose name starts with a dot, and `.nomedia` stays
-in the root as a second guard. A phone's own search app may still read such a
-folder; check by searching for a project file name after updating. A file manager
-and the folder picker show the folder once "show hidden files" is turned on. An
-existing visible folder (`vscodroid`, `VSCodroid`) is not moved; a folder you opened
-before is reopened as it was, and only a new default workspace uses `.VSCodroid`.
+The workspace is `/storage/emulated/0/vscodroid` with an empty `.nomedia` in it. That keeps the media
+scanner (Gallery, Recent) away. It does not stop every phone-wide search app from listing the files.
+A dot-folder (`.VSCodroid`) was tried to hide them and did not work, so it was removed.
 
-A fully search-proof alternative would be a DocumentsProvider: projects kept in
-private storage and shown in the system Files app as a "VSCodroid" location, as
-Termux does. Private storage also allows symbolic links, but file managers that
-browse `/storage/emulated/0` directly would not see it. It is a larger change.
+What would work: a DocumentsProvider. Projects stay in private storage, which no search app can read,
+and appear in the system Files app as a "VSCodroid" location, as Termux does. Private storage also
+allows symbolic links. The cost: file managers that browse `/storage/emulated/0` directly would not
+see the projects, which is the opposite of what the workspace move was for. It is a larger change and
+a product decision.
+
+## Intel programs
+
+`ubuntu x86 setup` installs `qemu-user-static` inside the arm64 Ubuntu and unpacks an amd64 Ubuntu Base
+beside it; `ubuntu x86 run ./prog` runs a prebuilt Intel Linux program through qemu with the amd64
+libraries at `/opt/amd64`. This needs no new binary in the app. It is an emulated processor, so it is
+slow, and it runs one program at a time; it does not make the shell an Intel one. Box64 is faster but
+is not offered as a ready download for Ubuntu arm64.
 
 ## Not built, and what each needs
 
-- **Intel programs.** proot can run them through qemu-user (`proot -q`) in an
-  amd64 Ubuntu root. Needs a qemu-user binary built for Android shipped with the
-  app (a new bundled binary, with its licence and size checks), an amd64 root
-  filesystem (same Ubuntu server), and a slow-by-design emulation. Box64 is faster
-  but is not packaged for Android/Ubuntu arm64 as a ready download.
 - **USB / Arduino.** Android's USB host API works, but programs inside proot cannot
   see `/dev/ttyUSB*`. The route is a small Android service (a USB-serial library)
   that serves the device on a local TCP port, with `esptool --port rfc2217://...`

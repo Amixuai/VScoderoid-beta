@@ -21,8 +21,8 @@ set -u
 
 DISTRO="${1:-ubuntu}"
 case "$DISTRO" in
-  ubuntu|alpine) ;;
-  *) echo "usage: bash proot-test.sh [ubuntu|alpine]"; exit 2 ;;
+  ubuntu|alpine|ubuntu-amd64) ;;
+  *) echo "usage: bash proot-test.sh [ubuntu|alpine|ubuntu-amd64]"; exit 2 ;;
 esac
 
 ROOT="$HOME/proot/$DISTRO"
@@ -56,16 +56,17 @@ def get(url):
     with urllib.request.urlopen(url, timeout=300) as r:
         return r.read()
 
-if distro == "ubuntu":
+if distro in ("ubuntu", "ubuntu-amd64"):
+    arch = "amd64" if distro == "ubuntu-amd64" else "arm64"
     # Ubuntu Base: the official minimal root filesystem. The file name carries the
     # point release, so it is read from the checksum list instead of guessed.
     base = os.environ.get("VSCODROID_UBUNTU_BASE",
                           "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/")
     sums = get(base + "SHA256SUMS").decode()
-    m = re.search(r"^([0-9a-f]{64}) [ *](ubuntu-base-24\.04(?:\.\d+)?-base-arm64\.tar\.gz)$",
+    m = re.search(r"^([0-9a-f]{64}) [ *](ubuntu-base-24\.04(?:\.\d+)?-base-" + arch + r"\.tar\.gz)$",
                   sums, re.M)
     if not m:
-        sys.exit("no arm64 Ubuntu Base in the release's checksum list")
+        sys.exit("no " + arch + " Ubuntu Base in the release's checksum list")
     want, name = m.group(1), m.group(2)
 else:
     base = os.environ.get("VSCODROID_ALPINE_BASE",
@@ -112,6 +113,13 @@ print("  unpacked " + name)
 PY
 else
   say "[2/3] $DISTRO is already unpacked."
+fi
+
+# The Intel root filesystem is only unpacked: its programs run through qemu inside
+# the arm64 Ubuntu (ubuntu x86 run ...), never started by proot directly.
+if [ "$DISTRO" = "ubuntu-amd64" ]; then
+  say "PASS: the Intel (amd64) Ubuntu files are unpacked in $ROOT"
+  exit 0
 fi
 
 mkdir -p "$ROOT/etc" "$ROOT/tmp" "$ROOT/root/hello"

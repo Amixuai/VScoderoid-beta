@@ -23,6 +23,17 @@ line records when the document was first written, not when it last changed; see
 | 11 | [Glossary](./11-GLOSSARY.md) | Terms, acronyms, technology definitions | Everyone |
 | 12 | [Implementation Plan](./12-IMPLEMENTATION_PLAN.md) | Week-by-week task breakdown, dependencies, checkpoints | Project leads, Developers |
 
+### Added 2026-10-15
+
+| Document | Description |
+|----------|-------------|
+| [Feature Status](./FEATURE_STATUS.md) | What is built, what was tested and where, what is not built, and which documents changed |
+| [Play Store: All files access](./PLAY_STORE_ALL_FILES_ACCESS.md) | The permission declaration, alternatives, fallback |
+| [Ubuntu routing](./UBUNTU_ROUTING.md) | gcc, python, cargo, go, apt run in a hidden Ubuntu |
+| [Symlinks on public storage](./SYMLINKS_ON_PUBLIC_STORAGE.md) | How the missing links are handled |
+| [proot prototype](./PROOT_PROTOTYPE.md) | The test that proves proot and Ubuntu run on a phone |
+| [The last 5%](./FINAL_5_PERCENT.md) | x86, USB, Docker, GUI, search: status and what each needs |
+
 ### Unnumbered References
 
 Kept against the shipping app. Three of these are read by users or by reviewers rather than by

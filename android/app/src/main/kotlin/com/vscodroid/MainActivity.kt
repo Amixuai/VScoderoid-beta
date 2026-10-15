@@ -417,7 +417,7 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * The system "All files access" screen. The workspace lives in public storage
-     * (`/storage/emulated/0/.VSCodroid`), which plain file access can only reach
+     * (`/storage/emulated/0/vscodroid`), which plain file access can only reach
      * once the user turns this on. Registered as a field for the same reason as
      * every launcher here.
      */
@@ -3275,6 +3275,7 @@ class MainActivity : AppCompatActivity() {
                 if (isWorkbenchUrl(url, port)) {
                     injectBridgeToken()
                     injectShortPathLabels()
+                    injectOpenFolderGuard()
                 }
             },
             onRetryServer = { retryServerStart() },
@@ -3550,7 +3551,7 @@ class MainActivity : AppCompatActivity() {
      * Keeps the long device path out of the interface.
      *
      * The editor reads and writes real paths such as
-     * `/storage/emulated/0/.VSCodroid/MyProject`, which is noise on a phone. This
+     * `/storage/emulated/0/vscodroid/MyProject`, which is noise on a phone. This
      * rewrites the TEXT shown in a few path-showing surfaces (Open Recent, the
      * Welcome page's recent list, the title bar and the folder pickers' lists) to
      * the short form `~/MyProject` or `MyProject`. It touches only those
@@ -3562,7 +3563,7 @@ class MainActivity : AppCompatActivity() {
             (function () {
               if (window.__vscodroidShortPaths) return;
               window.__vscodroidShortPaths = true;
-              var ROOT = /\/storage\/emulated\/0\/\.?vscodroid\/?/gi;
+              var ROOT = /\/storage\/emulated\/0\/vscodroid\/?/gi;
               var SHARED = /\/storage\/emulated\/0\//g;
               var SEL = [
                 '.quick-input-list .monaco-icon-label',
@@ -3595,6 +3596,49 @@ class MainActivity : AppCompatActivity() {
                 setTimeout(function () { pending = false; sweep(); }, 120);
               }).observe(document.body, { childList: true, subtree: true, characterData: true });
               sweep();
+            })();
+        """.trimIndent()
+        webView?.evaluateJavascript(script, null)
+    }
+
+    /**
+     * Makes every "Open Folder" open the Android folder picker.
+     *
+     * The workbench's own Open Folder (File menu, the long-press menu, the Explorer
+     * button) shows a box where a path has to be typed. The extension also takes
+     * over those commands, but if that ever does not win, this is the net under
+     * it: when a quick-input box titled "Open Folder" appears, it is closed and
+     * the system folder picker is opened instead. Other boxes are left alone.
+     */
+    private fun injectOpenFolderGuard() {
+        val script = """
+            (function () {
+              if (typeof AndroidBridge === 'undefined') return;
+              if (window.__vscodroidOpenFolderGuard) return;
+              window.__vscodroidOpenFolderGuard = true;
+              var last = 0;
+              function check() {
+                var title = document.querySelector('.quick-input-widget .quick-input-title');
+                if (!title || title.textContent.trim() !== 'Open Folder') return;
+                var box = title.closest('.quick-input-widget');
+                if (!box || box.style.display === 'none') return;
+                var now = Date.now();
+                if (now - last < 2000) return;
+                var token = (window.__vscodroid || {}).authToken;
+                if (!token) return;
+                last = now;
+                var input = box.querySelector('input');
+                if (input) {
+                  ['keydown', 'keyup'].forEach(function (t) {
+                    input.dispatchEvent(new KeyboardEvent(t, {
+                      key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true
+                    }));
+                  });
+                }
+                try { AndroidBridge.openFolderPicker(token); } catch (e) {}
+              }
+              new MutationObserver(function () { setTimeout(check, 30); })
+                .observe(document.body, { childList: true, subtree: true, attributes: true });
             })();
         """.trimIndent()
         webView?.evaluateJavascript(script, null)

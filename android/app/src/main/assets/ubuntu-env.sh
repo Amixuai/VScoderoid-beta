@@ -38,6 +38,7 @@ __vscodroid_ub_exec() {
   local -a bind=(-b /dev -b /proc -b /sys)
   [ -d /storage/emulated/0 ] && bind+=(-b /storage/emulated/0)
   case "$cwd" in /storage/emulated/0|/storage/emulated/0/*) ;; *) bind+=(-b "$cwd") ;; esac
+  [ -n "${VSCODROID_UB_EXTRA_BIND-}" ] && bind+=(-b "$VSCODROID_UB_EXTRA_BIND")
 
   local gpath=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   local -a envv=(HOME=/root "TERM=${TERM:-xterm}" LANG=C.UTF-8 DEBIAN_FRONTEND=noninteractive
@@ -275,9 +276,63 @@ __vscodroid_ub_gui() {
   esac
 }
 
+# ---- Intel (x86_64) programs ----------------------------------------------------
+# qemu-user, installed inside the arm64 Ubuntu, runs an Intel Linux program and
+# answers its system calls itself; the Intel libraries come from an amd64 Ubuntu
+# unpacked beside the main one and shown at /opt/amd64. Slow by nature (an
+# emulated processor) and EXPERIMENTAL. For prebuilt Intel binaries; it does not
+# turn the whole system into an Intel one.
+#
+#   ubuntu x86 setup          install qemu and fetch the amd64 files (once)
+#   ubuntu x86 run ./prog ... run an Intel program
+__vscodroid_ub_x86() {
+  local act=${1-help} root x86root marker prog abs id dst
+  root=$(__vscodroid_ub_root)
+  x86root="${root%/*}/ubuntu-amd64"
+  marker="$root/var/lib/vscodroid/provisioned/qemu"
+  case "$act" in
+    setup)
+      if [ ! -f "$marker" ]; then
+        echo "vscodroid: installing qemu into the Ubuntu system (a few minutes, once)..." >&2
+        __vscodroid_ub_exec apt-get update -qq &&
+          __vscodroid_ub_exec apt-get install -y -qq --no-install-recommends qemu-user-static || {
+          echo "vscodroid: could not install qemu (is the phone online?)" >&2; return 1; }
+        mkdir -p "${marker%/*}" && : > "$marker"
+      fi
+      if [ ! -e "$x86root/lib64/ld-linux-x86-64.so.2" ] && [ ! -e "$x86root/usr/lib64/ld-linux-x86-64.so.2" ]; then
+        bash "$HOME/.vscodroid/proot-test.sh" ubuntu-amd64 || return 1
+      fi
+      echo "vscodroid: Intel programs are ready: ubuntu x86 run ./program"
+      return 0 ;;
+    run)
+      shift
+      [ $# -ge 1 ] || { echo "usage: ubuntu x86 run PROGRAM [ARGS]" >&2; return 2; }
+      if [ ! -f "$marker" ] || [ ! -d "$x86root/usr" ]; then
+        echo "vscodroid: run  ubuntu x86 setup  first" >&2; return 1
+      fi
+      prog=$1; shift
+      case "$prog" in
+        */*) abs="$(cd "${prog%/*}" 2>/dev/null && pwd -P)/${prog##*/}" ;;
+        *) abs="$(pwd -P)/$prog" ;;
+      esac
+      [ -f "$abs" ] || { echo "vscodroid: $prog: no such file" >&2; return 1; }
+      id=$(printf '%s' "$abs" | cksum | cut -d' ' -f1)
+      dst="$root/tmp/vsc-run/$id/${abs##*/}"
+      mkdir -p "${dst%/*}" && cp -f "$abs" "$dst" && chmod 755 "$dst" || return 1
+      VSCODROID_UB_EXTRA_BIND="$x86root:/opt/amd64" \
+        __vscodroid_ub_exec qemu-x86_64-static -L /opt/amd64 "/tmp/vsc-run/$id/${abs##*/}" "$@"
+      return $? ;;
+    *) echo "usage: ubuntu x86 setup | ubuntu x86 run PROGRAM [ARGS]" >&2; return 2 ;;
+  esac
+}
+
 ubuntu() {
   case "${1-}" in
     setup) bash "$HOME/.vscodroid/proot-test.sh" ubuntu; return $? ;;
+    x86)
+      shift
+      if ! __vscodroid_ub_ready; then echo "vscodroid: the Ubuntu system is not installed yet. Run:  ubuntu setup" >&2; return 1; fi
+      __vscodroid_ub_x86 "$@"; return $? ;;
     gui)
       shift
       if ! __vscodroid_ub_ready; then echo "vscodroid: the Ubuntu system is not installed yet. Run:  ubuntu setup" >&2; return 1; fi
@@ -287,6 +342,7 @@ ubuntu() {
       echo "ubuntu CMD ...    run CMD there (ubuntu ./hello runs a built program)"
       echo "ubuntu setup      install the Ubuntu system (once)"
       echo "ubuntu gui start  graphical desktop for Tkinter/Pygame (experimental)"
+      echo "ubuntu x86 setup  run Intel (x86_64) programs through qemu (experimental)"
       echo "native CMD ...    run CMD on the phone itself, not in Ubuntu"
       return 0 ;;
   esac

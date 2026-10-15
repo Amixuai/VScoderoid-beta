@@ -188,3 +188,26 @@ A security vulnerability where malicious scripts are injected into web content. 
 | VSIX | VS Code Extension Package |
 | W^X | Write XOR Execute |
 | WS | WebSocket |
+
+---
+
+## Added 2026-10-15
+
+**All files access (`MANAGE_EXTERNAL_STORAGE`)**
+An Android special permission, switched on by the user on a system settings screen, that lets an app read and write shared storage with ordinary file calls. Used for the workspace folder.
+
+**`.nomedia`**
+An empty file that tells Android's media scanner to skip a folder and everything under it.
+
+**proot**
+A program that runs another Linux system's programs by translating their file paths and system calls, without root. Used to run Ubuntu inside the app.
+
+**rootfs**
+The files that make up a Linux system (`/bin`, `/usr`, `/etc`). The app keeps an Ubuntu rootfs in private storage.
+
+**glibc / musl**
+Two C libraries. Programs built for PCs expect glibc (Ubuntu); Alpine uses musl, so many PC binaries fail on it.
+
+**Routing (wrapper)**
+Shell functions that catch a command such as `gcc` and run it in Ubuntu instead of on the phone.
+

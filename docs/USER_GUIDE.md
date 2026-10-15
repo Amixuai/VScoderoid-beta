@@ -33,11 +33,24 @@ A practical guide to using VSCodroid -- the full VS Code IDE running natively on
 
 | Item | Path |
 |------|------|
-| Projects folder | `~/projects/` |
-| Settings and data | `~/.vscodroid/` |
-| SSH keys | `~/.ssh/` |
+| Projects folder | `/storage/emulated/0/vscodroid` once you allow "All files access"; until then `~/projects/` in the app's private storage |
+| Settings and data | `~/.vscodroid/` (private) |
+| SSH keys | `~/.ssh/` (private) |
+| Ubuntu system (C/C++ compilers, Python, Rust) | private storage, `~/proot/ubuntu` |
 
-All files are stored in the app's private sandbox. No root access is required.
+The first launch asks you to allow **All files access**. It lets your projects sit in a normal
+folder, so your file manager and other apps can see them. The editor, its tools and the Ubuntu
+system stay in private storage. No root access is required.
+
+**Open Folder.** File > Open Folder, the long-press menu and the Explorer button open Android's own
+folder picker: tap to the folder you want. A new empty folder can be made from the picker.
+
+**Terminal.** Type the same commands as on a PC. `gcc`, `g++`, `make`, `python`, `pip`, `cargo`
+and `apt` run in the Ubuntu system (installed on first use, a few minutes, needs internet).
+`ubuntu` opens an Ubuntu shell; `./program` runs what you built; `native cmd` runs the phone's own
+version. After `npm start` or `python -m http.server` the page opens in your browser. Android's
+shared storage has no symbolic links, so `npm install` and `python -m venv` are adjusted for you.
+See [UBUNTU_ROUTING](./UBUNTU_ROUTING.md) and [SYMLINKS_ON_PUBLIC_STORAGE](./SYMLINKS_ON_PUBLIC_STORAGE.md).
 
 ---
 

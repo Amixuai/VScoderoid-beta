@@ -1,7 +1,7 @@
 # VSCodroid Privacy Policy
 
 **Effective Date: February 13, 2026**
-**Last Updated: September 27, 2026**
+**Last Updated: October 15, 2026**
 
 ## Summary
 
@@ -23,12 +23,20 @@ VSCodroid runs a local code editor server entirely on your Android device. The e
 
 All code execution -- whether Node.js, Python, Bash, or any other bundled runtime -- happens 100% on your device.
 
-The app asks for four Android permissions of its own. `INTERNET` covers the
+The app asks for five Android permissions of its own. `INTERNET` covers the
 user-initiated cases listed under **Network Access** below, and the loopback
 traffic between the editor page and the local server. `FOREGROUND_SERVICE` and
 `FOREGROUND_SERVICE_SPECIAL_USE` keep that local server alive while you are
 working. `POST_NOTIFICATIONS` is for the notification showing the server's
-status.
+status. `MANAGE_EXTERNAL_STORAGE` ("All files access") lets the app keep your
+projects in an ordinary folder on your phone (`/storage/emulated/0/vscodroid`)
+and read and write it directly, so you can see the files in your file manager
+and the tools you run in the terminal can work on them. You switch it on
+yourself, on Android's own settings screen, and the app works without it, with
+its projects in private storage. The app itself reads and writes only that
+folder and the folders you pick; nothing in them is sent anywhere by the app.
+Programs you run in the terminal can reach whatever the phone allows an app with
+this permission to reach, as on a computer.
 
 Two more are added by libraries the app is built with, and the Play listing
 shows that merged set rather than ours, so they are named here as well.
@@ -92,6 +100,16 @@ VSCodroid does not collect any data during either process.
 When you run commands like `npm install` or `pip install` in the terminal, those package managers connect to their respective registries (npmjs.com, pypi.org, etc.) to download packages. This is standard developer tooling behavior and is entirely under your control.
 
 `pip` is also pointed at a page this project publishes on GitHub Pages, one per Python version (for the Python this app bundles, https://rmyndharis.github.io/VSCodroid/wheels/3.14/wheels.html), which lists prebuilt Android builds of a few packages that PyPI has none of, such as `numpy` and `psutil`. pip reads that page when it looks for a package to install, including when the Jupyter extension installs `ipykernel`, and downloads a listed package from this project's GitHub Releases. Nothing from your files or code is sent. Like every request pip makes, including those to pypi.org, GitHub receives your device's IP address and pip's User-Agent, which names the versions of pip, Python and OpenSSL, the Android version, and the processor architecture, plus the versions of setuptools and the Rust compiler when those are installed, and whether pip appears to be running on a continuous-integration service; GitHub's privacy policy applies to them. How to turn this off is in the user guide, under Python Packages Written in C.
+
+### Linux Environment (User-Initiated)
+
+If you use the Ubuntu environment (the first time you run a compiler or
+`ubuntu setup`), the app downloads Ubuntu's official minimal system from
+`cdimage.ubuntu.com`, checks it against the checksum published beside it, and
+installs packages (gcc, Python and so on) from Ubuntu's package servers
+(`ports.ubuntu.com`) when you first use a tool that needs them. The system is
+stored in the app's private storage. Those servers see an ordinary download
+request from your device. VSCodroid does not collect any data during this.
 
 ### SSH Connections (User-Initiated)
 

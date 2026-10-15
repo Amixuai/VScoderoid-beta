@@ -260,8 +260,9 @@ to: patch 0005 disables the service worker upstream uses to scope each webview t
 | `FOREGROUND_SERVICE`             | Keep Node.js alive in background                | Install time   |
 | `FOREGROUND_SERVICE_SPECIAL_USE` | Dev server foreground service type              | Install time   |
 | `POST_NOTIFICATIONS`             | Foreground Service notification (API 33+)       | Runtime        |
+| `MANAGE_EXTERNAL_STORAGE`        | Projects live in `/storage/emulated/0/vscodroid` (see 4.3) | Special access screen |
 
-Those four are what **this app's own** `AndroidManifest.xml` declares. The **installed** app holds
+Those five are what **this app's own** `AndroidManifest.xml` declares. The **installed** app holds
 more, because the manifest merger adds permissions from libraries, and a Play Store listing shows
 the merged set rather than ours:
 
@@ -275,16 +276,30 @@ is, and reading it is the step that catches a library adding a permission nobody
 
 ### 4.2 Permissions this app does not hold
 
-Nothing below is declared. The first two were listed in this document as though they were held,
-until 2026-08-20; the rest have never been in scope.
+Nothing below is declared. (`MANAGE_EXTERNAL_STORAGE` was listed here until 2026-10-15; it is now
+held, see 4.1 and 4.3.)
 
 | Permission                                              | Why not                                                                                                                                                                                                                                                          |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MANAGE_EXTERNAL_STORAGE`                               | It would pull in a Play declaration process the app has no need of. Folders outside app storage are reached through SAF, which is a per-folder user grant rather than a permission, and which has the sync engine that makes write-back work                       |
 | `WAKE_LOCK`                                             | A consequence worth knowing: a foreground service keeps the process alive but does not keep the CPU awake, so a long build or test run in the terminal can stall when the screen goes off. Holding a wake lock is a product decision nobody has made yet           |
 | `READ_EXTERNAL_STORAGE`                                 | SAF is used instead, which grants one folder at a time rather than the whole of shared storage                                                                                                                                                                    |
 | `REQUEST_INSTALL_PACKAGES`                              | Not needed. The app installs no APKs; toolchains land in `filesDir` as plain files                                                                                                                                                                                |
 | `CAMERA`, `MICROPHONE`, `LOCATION`, `CONTACTS`, `PHONE` | Not needed by a code editor                                                                                                                                                                                                                                      |
+
+### 4.3 All files access (`MANAGE_EXTERNAL_STORAGE`)
+
+Added 2026-10-15. It replaced the per-folder SAF copy as the default way to hold a workspace,
+because git, npm and the compilers run through the Ubuntu subsystem need real paths, and a copy
+that is synchronised back is slow and can lose edits.
+
+| Risk | Control |
+| ---- | ------- |
+| The app can reach all of shared storage | The app's own code opens only the workspace folder and folders the user picks; the permission is granted by the user on Android's own screen and can be withdrawn there |
+| Programs in the terminal reach everything the phone allows | Same as a computer; proot binds the current folder and `/storage/emulated/0`, nothing from the app's private storage other than the Ubuntu system itself |
+| Projects appear in Gallery or Recent | An empty `.nomedia` in the workspace root; the media scanner skips the folder. Phone-wide search apps are not controlled by it |
+| Play policy | Needs the Play "All files access" declaration; see [PLAY_STORE_ALL_FILES_ACCESS](./PLAY_STORE_ALL_FILES_ACCESS.md). Fallback: a build without the permission that uses the SAF mirror |
+| Shared storage has no symbolic links and no executable files | Handled in the terminal by `assets/command-wrapper.sh` and `assets/ubuntu-env.sh`; see [SYMLINKS_ON_PUBLIC_STORAGE](./SYMLINKS_ON_PUBLIC_STORAGE.md) and [UBUNTU_ROUTING](./UBUNTU_ROUTING.md) |
+
 
 ---
 

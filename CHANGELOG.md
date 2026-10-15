@@ -1,6 +1,9 @@
 ## Unreleased
 
-- Default workspace is now the dot folder `/storage/emulated/0/.VSCodroid` (with `.nomedia`), so projects stay out of phone search. Folders opened before are reopened as they were.
+- `ubuntu x86 setup` / `ubuntu x86 run ./prog`: experimental Intel (x86_64) programs through qemu-user inside Ubuntu. No new bundled binary.
+- Reverted the dot folder: the workspace is `/storage/emulated/0/vscodroid` again (with `.nomedia`). The dot did not keep projects out of phone search.
+- Open Folder, from the File menu, the long-press menu and the Explorer, opens the Android folder picker; a WebView fallback replaces the typed-path box if the command override does not win.
+- Docs updated for the permission and storage change: privacy policy, security, release plan, architecture, user guide, risk matrix, glossary; new `PLAY_STORE_ALL_FILES_ACCESS.md` and `FEATURE_STATUS.md`.
 - After `npm start`, `npm run dev`, `python -m http.server` and similar, the dev server's address is opened in the phone's browser (`xdg-open` also works). Off with `VSCODROID_NO_PREVIEW=1`.
 - `ubuntu gui start|stop`: experimental virtual screen for Tkinter/Pygame, shown in the browser. See `docs/FINAL_5_PERCENT.md`.
 - Ubuntu routing: gcc, g++, make, cmake, python, pip, cargo, rustc, go, apt and dpkg now run inside the private Ubuntu system (proot) from the terminal, in the current workspace folder. `./prog` runs programs built in the workspace (through a private copy), `ubuntu` opens a shell there, `native cmd` bypasses it. See `docs/UBUNTU_ROUTING.md`.

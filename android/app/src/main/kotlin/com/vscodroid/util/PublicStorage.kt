@@ -9,7 +9,7 @@ import java.io.File
 import java.io.IOException
 
 /**
- * The user's workspace on public external storage (`/storage/emulated/0/.VSCodroid`).
+ * The user's workspace on public external storage (`/storage/emulated/0/vscodroid`).
  *
  * Everything here uses plain [java.io.File]. Nothing is inserted into MediaStore,
  * because that is what pushes project files into the system "Recent" list.
@@ -26,14 +26,12 @@ import java.io.IOException
 object PublicStorage {
 
     /**
-     * A folder whose name starts with a dot. Android's media scanner and the
-     * phone's search skip such folders, so thousands of project files never turn
-     * up next to the user's own documents, where one could be taken for junk and
-     * deleted. A file manager still shows it once "show hidden files" is on, and
-     * the system folder picker too. [NOMEDIA] stays in it as a second guard for
-     * indexers that do read dot folders.
+     * A plain folder name, so the workspace shows up in every file manager. A
+     * dot in front was tried to keep projects out of phone search; it did not
+     * work, so it was removed. [NOMEDIA] keeps the media scanner (Gallery, Recent)
+     * out of it.
      */
-    const val ROOT_NAME = ".VSCodroid"
+    const val ROOT_NAME = "vscodroid"
     const val NOMEDIA = ".nomedia"
 
     /** Top-level shared folders where a `.nomedia` would hide the user's own media. */
@@ -135,7 +133,7 @@ object PublicStorage {
 
     /**
      * What the interface shows instead of a long path: the folder's own name.
-     * The root itself reads ".VSCodroid".
+     * The root itself reads "vscodroid".
      */
     fun displayLabel(path: String): String {
         val name = File(path).name

@@ -52,3 +52,9 @@ opened in the phone's browser through Android's VIEW intent. A port that was
 already answering is ignored. `VSCODROID_NO_PREVIEW=1` turns it off; `xdg-open
 <address>` opens an address by hand.
 
+## Intel (x86_64) programs - experimental
+
+`ubuntu x86 setup` (once) installs qemu and unpacks an amd64 Ubuntu Base into `~/proot/ubuntu-amd64`.
+`ubuntu x86 run ./prog args` runs an Intel Linux program through qemu-user with the amd64 libraries
+mounted at `/opt/amd64`. Slow; prebuilt programs only.
+
