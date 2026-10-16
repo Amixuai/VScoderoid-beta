@@ -126,7 +126,7 @@ without the credential minted for that boot, which rides in the proxy URL.
 | ---------------- | ----------------------------------------------------------------------------------------------------------- |
 | User source code | Two locations, see 5.2. Not backed up. Sent nowhere by the app itself; the bundled chat provider is the exception and section 5.1 names it |
 | VS Code settings | App-private storage                                                                                         |
-| Git credentials  | Git credential store in app-private home dir                                                                |
+| Git credentials  | Phone git: VS Code's GitHub sign-in (sealed in the workbench secret store). Ubuntu git: git `store` file `~/.vscodroid/ubuntu-git/credentials`, mode 600, app-private, not encrypted (see ANDROID_LIMITATION_LOG)                                                                |
 | SSH keys         | File permissions 600, app-private storage                                                                   |
 | OAuth tokens     | Held by the workbench's `LocalStorageSecretStorageProvider`, which the app switches on with the `vscode-secret-key-path` cookie. They are sealed with AES-GCM into the WebView's localStorage under a 32-byte key kept in `no_backup` (`SecretStorageKey`), which the WebView client answers to a POST on the workbench origin (see 3.7). Neither is backed up. Any script running on the workbench origin, and any process in the app sandbox (extensions, terminals, build scripts, `/vscode-remote-resource` with the token), can obtain both the key and the sealed data, so the sandbox is still the boundary. |
 | Clipboard data   | Transient, follows Android clipboard lifecycle                                                              |
@@ -155,7 +155,7 @@ Releases. Only the first is covered by Play's signing.
 | Machine-scoped defaults (`home/.vscodroid/data/Machine`) | Included. It is the only path the allowlist names |
 | Themes, keybindings and workbench state the user chose | **Excluded.** They live in the WebView's IndexedDB, which no rule includes, so they do not survive a restore |
 | SSH keys (~/.ssh/)                     | Excluded from backup                           |
-| Git credentials (~/.gitconfig)         | Excluded from backup                           |
+| Git credentials (~/.gitconfig, ~/.vscodroid/ubuntu-git) | Excluded from backup (the allowlist names only the Machine settings) |
 | User workspace files                   | Excluded from backup (too large, user-managed) |
 | Installed extensions                   | Excluded (re-downloadable)                     |
 | Server logs                            | Excluded                                       |
@@ -298,6 +298,8 @@ that is synchronised back is slow and can lose edits.
 | Programs in the terminal reach everything the phone allows | Same as a computer; proot binds the current folder and `/storage/emulated/0`, nothing from the app's private storage other than the Ubuntu system itself |
 | Projects appear in Gallery or Recent | An empty `.nomedia` in the workspace root; the media scanner skips the folder. Phone-wide search apps are not controlled by it |
 | Play policy | Needs the Play "All files access" declaration; see [PLAY_STORE_ALL_FILES_ACCESS](./PLAY_STORE_ALL_FILES_ACCESS.md). Fallback: a build without the permission that uses the SAF mirror |
+| A token typed into a remote address lands in `.git/config` inside a project | The phone's `git` refuses addresses with a password or token; `ubuntu git-check` warns about one already there |
+| Ubuntu reset removes the wrong folder | The command refuses any path but `*/proot/ubuntu`, never one in shared storage, and `rm` does not follow links; tested with a link to a project |
 | Shared storage has no symbolic links and no executable files | Handled in the terminal by `assets/command-wrapper.sh` and `assets/ubuntu-env.sh`; see [SYMLINKS_ON_PUBLIC_STORAGE](./SYMLINKS_ON_PUBLIC_STORAGE.md) and [UBUNTU_ROUTING](./UBUNTU_ROUTING.md) |
 
 

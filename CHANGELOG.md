@@ -1,5 +1,8 @@
 ## Unreleased
 
+- `ubuntu repair` / `ubuntu reset` (with a "Proceed? [Y/n]" question) and the Command Palette entry "VSCodroid: Reinstall Linux Environment" (saf-bridge 1.12.0). Only the Ubuntu system in private storage is replaced.
+- Git is installed inside Ubuntu in the background; `ubuntu git-login | git-logout | git-check`; sign-in kept in private storage and across a reset; the phone's `git` refuses remote addresses that carry a token.
+- All Ubuntu package installs share one lock.
 - `ubuntu x86 setup` / `ubuntu x86 run ./prog`: experimental Intel (x86_64) programs through qemu-user inside Ubuntu. No new bundled binary.
 - Reverted the dot folder: the workspace is `/storage/emulated/0/vscodroid` again (with `.nomedia`). The dot did not keep projects out of phone search.
 - Open Folder, from the File menu, the long-press menu and the Explorer, opens the Android folder picker; a WebView fallback replaces the typed-path box if the command override does not win.

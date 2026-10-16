@@ -58,3 +58,19 @@ already answering is ignored. `VSCODROID_NO_PREVIEW=1` turns it off; `xdg-open
 `ubuntu x86 run ./prog args` runs an Intel Linux program through qemu-user with the amd64 libraries
 mounted at `/opt/amd64`. Slow; prebuilt programs only.
 
+## Repair and reinstall
+
+`ubuntu repair` runs a check (can proot start Ubuntu, does `dpkg --audit` report nothing) and reinstalls only if it
+fails. `ubuntu reset` reinstalls after the question "Proceed? [Y/n]" (`--yes` skips it). Only the folders
+`~/proot/ubuntu` and `~/proot/ubuntu-amd64` in private storage are removed; the command refuses any other path, and
+anything under `/storage`, `/sdcard` or `/mnt`. Links inside Ubuntu are removed, never followed. The Command Palette entry
+**VSCodroid: Reinstall Linux Environment** (saf-bridge 1.12.0) opens a terminal and runs `ubuntu reset`.
+
+## Git inside Ubuntu
+
+Installed once, in the background, the first time Ubuntu is ready (git, ca-certificates, openssh-client). Settings and
+sign-in live in `~/.vscodroid/ubuntu-git` (shown in Ubuntu as `/root/.vscodroid-git`), so a reset keeps them. The helper
+is git's own `store`, pointed at that private file. `ubuntu git-login | git-logout | git-check` manage it. All package
+installs (first use of a tool, the Git setup, `ubuntu gui`, your own `apt`) take turns through one lock, because dpkg
+allows one at a time. The phone's `git` refuses remote addresses that carry a token (`VSCODROID_NO_TOKEN_GUARD=1` turns
+that off).

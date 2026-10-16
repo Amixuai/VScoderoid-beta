@@ -156,6 +156,20 @@ function activate(context) {
     }));
     context.subscriptions.push(...openFolderOverrides);
 
+    // -- Reinstall Linux Environment --
+    // Opens a terminal and runs `ubuntu reset` in it. The question ("Proceed? [Y/n]")
+    // and everything after it happen there, where the user can see it; only the
+    // Ubuntu system in private storage is replaced, never a project.
+    const reinstallLinuxCmd = vscode.commands.registerCommand(
+        'vscodroid.reinstallLinux',
+        () => {
+            const terminal = vscode.window.createTerminal({ name: 'Linux Environment' });
+            terminal.show();
+            terminal.sendText('ubuntu reset');
+        }
+    );
+    context.subscriptions.push(reinstallLinuxCmd);
+
     // -- Open Recent Folder --
 
     const recentFolderCmd = vscode.commands.registerCommand(

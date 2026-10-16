@@ -2,6 +2,7 @@
   "displayName": "VSCodroid Android Bridge",
   "description": "Commands that reach Android: device folders, browser, SSH keys, storage, about",
   "command.openFolderFromDevice": "VSCodroid: Open Folder from Device",
+  "command.reinstallLinux": "VSCodroid: Reinstall Linux Environment",
   "command.openRecentFolder": "VSCodroid: Open Recent Folder",
   "command.openInBrowser": "VSCodroid: Open in Browser",
   "command.generateSshKey": "VSCodroid: Generate SSH Key",

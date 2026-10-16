@@ -327,3 +327,11 @@ The decisions these risks settled, and what each one buys:
 | Project files turn up in phone-wide search | High | Low | `.nomedia` covers the media scanner only; not solved for every search app (see FINAL_5_PERCENT) |
 | Ubuntu system needs hundreds of MB | Certain | Low | Installed on first use only; stored privately; removable |
 
+## Added 2026-10-16 (Ubuntu recovery, Git)
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| `ubuntu reset` removes user files | Low | Critical | Removes only `*/proot/ubuntu*` in private storage, refuses other paths, asks first, `rm` does not follow links; tested with a link to a project |
+| A Git token ends up in a project | Medium | High | Address guard in the phone's `git`; token typed hidden and passed on stdin; `ubuntu git-check` warns |
+| Ubuntu git sign-in is a plain file | Certain | Medium | Private storage, mode 600, excluded from backups; stronger storage needs Android Keystore work (ANDROID_LIMITATION_LOG) |
+| Two package installs collide | Medium | Low | One lock for all of ours; a dead owner's lock is cleared |

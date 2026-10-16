@@ -52,6 +52,32 @@ version. After `npm start` or `python -m http.server` the page opens in your bro
 shared storage has no symbolic links, so `npm install` and `python -m venv` are adjusted for you.
 See [UBUNTU_ROUTING](./UBUNTU_ROUTING.md) and [SYMLINKS_ON_PUBLIC_STORAGE](./SYMLINKS_ON_PUBLIC_STORAGE.md).
 
+### Repairing the Linux Environment
+
+If a wrong command breaks Ubuntu, you do not need to reinstall the app.
+
+- In the terminal: `ubuntu repair` checks Ubuntu and reinstalls it only if it is damaged; `ubuntu reset` reinstalls it
+  anyway.
+- From the Command Palette: **VSCodroid: Reinstall Linux Environment** (it runs `ubuntu reset` in a terminal).
+
+Before anything is removed you are asked: "Warning: This will wipe all packages installed inside Ubuntu. Your files in
+/VSCodroid will NOT be deleted. Proceed? [Y/n]". Enter or `y` goes ahead; anything else cancels. Only the Ubuntu system in
+the app's private storage is replaced. Your projects, and your Git settings and sign-in, are kept. Python virtual
+environments made before need to be created again. In a script, `ubuntu reset --yes` skips the question.
+
+### Git in Ubuntu and signing in
+
+The first time Ubuntu is ready, Git is installed inside it in the background (log: `~/.vscodroid/git-setup.log`), so
+`cargo`, `pip` and the Ubuntu shell can fetch from Git. Source Control and the terminal's own `git` keep using the
+phone's Git and VS Code's GitHub sign-in as before.
+
+- `ubuntu git-login` asks for a username and a token (typing is hidden) and stores them for Ubuntu's Git in the app's
+  private storage. `ubuntu git-logout` removes them; `ubuntu git-check` shows what is set up.
+- A GitHub token is entered as the password. Make a token with only the access you need.
+- The sign-in is a protected file in private storage, not encrypted, and it is never in a project or in a backup.
+- `git remote add`, `clone`, `fetch`, `pull` and `push` refuse an address that carries a password or token, because Git
+  would write it into `.git/config` inside your project. Use the plain address and sign in instead.
+
 ---
 
 ## Editor Basics

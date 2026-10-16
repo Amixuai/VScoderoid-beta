@@ -211,3 +211,8 @@ Two C libraries. Programs built for PCs expect glibc (Ubuntu); Alpine uses musl,
 **Routing (wrapper)**
 Shell functions that catch a command such as `gcc` and run it in Ubuntu instead of on the phone.
 
+**Credential helper**
+A small program Git calls to fetch or save a username and password. `store` keeps them in a file.
+
+**`ubuntu reset` / `ubuntu repair`**
+Commands that reinstall the Ubuntu system in private storage without touching projects.

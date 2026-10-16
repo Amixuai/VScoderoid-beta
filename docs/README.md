@@ -32,6 +32,8 @@ line records when the document was first written, not when it last changed; see
 | [Ubuntu routing](./UBUNTU_ROUTING.md) | gcc, python, cargo, go, apt run in a hidden Ubuntu |
 | [Symlinks on public storage](./SYMLINKS_ON_PUBLIC_STORAGE.md) | How the missing links are handled |
 | [proot prototype](./PROOT_PROTOTYPE.md) | The test that proves proot and Ubuntu run on a phone |
+| [Android limitation log](./ANDROID_LIMITATION_LOG.md) | Investigation record: Ubuntu recovery, Git, where a token is kept |
+| [Device tests: recovery and Git](./DEVICE_TESTS_RECOVERY_GIT.md) | Phone tests, none run yet |
 | [The last 5%](./FINAL_5_PERCENT.md) | x86, USB, Docker, GUI, search: status and what each needs |
 
 ### Unnumbered References

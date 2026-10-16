@@ -1,7 +1,7 @@
 # VSCodroid Privacy Policy
 
 **Effective Date: February 13, 2026**
-**Last Updated: October 15, 2026**
+**Last Updated: October 18, 2026**
 
 ## Summary
 
@@ -110,6 +110,11 @@ installs packages (gcc, Python and so on) from Ubuntu's package servers
 (`ports.ubuntu.com`) when you first use a tool that needs them. The system is
 stored in the app's private storage. Those servers see an ordinary download
 request from your device. VSCodroid does not collect any data during this.
+
+The first time the Ubuntu environment is ready, the app also installs Git inside it from those same package servers.
+If you use `ubuntu git-login`, the username and token you type are kept in a file in the app's private storage (not in
+any project, not in a backup) and are used only when Git inside Ubuntu contacts the server you named. They are not sent
+to VSCodroid or anyone else, and `ubuntu git-logout` removes them.
 
 ### SSH Connections (User-Initiated)
 

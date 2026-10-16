@@ -129,6 +129,8 @@ If you are **ready to learn**, you should be able to **start today**.
 - **SSH Out of the Box**: Bundled OpenSSH client and `ssh-keygen`, preconfigured with sane defaults (ed25519, keepalive, `accept-new`).
 - **Language Picker**: Select your languages; Ruby and Java install on demand, via Play Asset Delivery on Play installs, or direct download on sideloaded installs.
 - **Dev Server Preview**: Preview a running dev server in an editor tab beside your code, or hand it to the device's browser. See [Dev Server Preview](docs/USER_GUIDE.md#dev-server-preview) in the user guide for the steps.
+- **Linux Environment (Ubuntu)**: compilers and Python run in a hidden Ubuntu inside the app. `ubuntu repair` and `ubuntu reset` (or **VSCodroid: Reinstall Linux Environment** in the Command Palette) fix a broken one without touching your projects. See [UBUNTU_ROUTING](docs/UBUNTU_ROUTING.md).
+- **Git Everywhere, Tokens Kept Out of Projects**: Git is set up inside Ubuntu in the background; sign-in is stored in private app storage, and an address that carries a token is refused. See [Git in Ubuntu](docs/USER_GUIDE.md#git-in-ubuntu-and-signing-in).
 
 ## 📸 Screenshots
 

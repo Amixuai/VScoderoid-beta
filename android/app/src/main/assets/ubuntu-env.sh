@@ -12,6 +12,8 @@
 #                               native python3 script.py
 # Open an Ubuntu shell:         ubuntu
 # Install Ubuntu (once):        ubuntu setup
+# Repair / reinstall Ubuntu:    ubuntu repair | ubuntu reset   (your projects are never touched)
+# Git sign-in for Ubuntu's git: ubuntu git-login | ubuntu git-logout | ubuntu git-check
 #
 # Android will not start a program that is stored in shared storage (the
 # workspace). So that `./hello` works after `gcc hello.c -o hello` as on a PC,
@@ -23,6 +25,8 @@ declare -F __vscodroid_ub_loaded >/dev/null 2>&1 && return 0
 __vscodroid_ub_loaded() { :; }
 
 __vscodroid_ub_root() { printf '%s' "${VSCODROID_UBUNTU_ROOT:-$HOME/proot/ubuntu}"; }
+
+__vscodroid_ub_git_dir() { printf '%s' "$HOME/.vscodroid/ubuntu-git"; }
 
 __vscodroid_ub_ready() {
   local r; r=$(__vscodroid_ub_root)
@@ -39,6 +43,10 @@ __vscodroid_ub_exec() {
   [ -d /storage/emulated/0 ] && bind+=(-b /storage/emulated/0)
   case "$cwd" in /storage/emulated/0|/storage/emulated/0/*) ;; *) bind+=(-b "$cwd") ;; esac
   [ -n "${VSCODROID_UB_EXTRA_BIND-}" ] && bind+=(-b "$VSCODROID_UB_EXTRA_BIND")
+  # Ubuntu's git settings and sign-in live in the app's private storage, outside the
+  # Ubuntu system, so a reset or repair of Ubuntu keeps them (see __vscodroid_ub_git_dir).
+  local gitdir; gitdir=$(__vscodroid_ub_git_dir)
+  [ -d "$gitdir" ] && bind+=(-b "$gitdir:/root/.vscodroid-git")
 
   local gpath=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   local -a envv=(HOME=/root "TERM=${TERM:-xterm}" LANG=C.UTF-8 DEBIAN_FRONTEND=noninteractive
@@ -47,6 +55,7 @@ __vscodroid_ub_exec() {
     envv+=("VIRTUAL_ENV=$VSCODROID_VENV"); gpath="$VSCODROID_VENV/bin:$gpath"
   fi
   envv+=("PATH=$gpath")
+  [ -f "$gitdir/gitconfig" ] && envv+=(GIT_CONFIG_GLOBAL=/root/.vscodroid-git/gitconfig)
   # While the graphical desktop runs (ubuntu gui start), programs draw on it.
   if [ -f "$HOME/.vscodroid/gui.pid" ] && kill -0 "$(cat "$HOME/.vscodroid/gui.pid" 2>/dev/null)" 2>/dev/null; then
     envv+=(DISPLAY=:1)
@@ -75,6 +84,30 @@ __vscodroid_ub_exec() {
     /usr/bin/env -i "${envv[@]}" "$@"
 }
 
+# ---- one package install at a time ------------------------------------------------
+# Several things install packages: the first use of a tool, the Git setup that runs
+# in the background, `ubuntu gui`, and the user's own apt. dpkg allows one at a time,
+# so ours take a lock folder and wait their turn; a lock whose owner is gone is cleared.
+__vscodroid_ub_lock() {
+  local d="$HOME/.vscodroid/ubuntu.lock.d" waited=0 pid
+  mkdir -p "$HOME/.vscodroid" 2>/dev/null
+  while ! mkdir "$d" 2>/dev/null; do
+    pid=$(cat "$d/pid" 2>/dev/null)
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then rm -rf "$d"; continue; fi
+    [ $waited -ge "${VSCODROID_UB_LOCK_WAIT:-900}" ] && return 1
+    sleep 1; waited=$((waited + 1))
+  done
+  echo "${BASHPID:-$$}" > "$d/pid"
+}
+__vscodroid_ub_unlock() { rm -rf "$HOME/.vscodroid/ubuntu.lock.d"; }
+__vscodroid_ub_apt() {
+  local st
+  __vscodroid_ub_lock || { echo "vscodroid: another package install is still running" >&2; return 1; }
+  __vscodroid_ub_exec apt-get "$@"; st=$?
+  __vscodroid_ub_unlock
+  return $st
+}
+
 # command -> "group packages...": installed the first time the command is used.
 __vscodroid_ub_group() {
   case "$1" in
@@ -93,7 +126,7 @@ __vscodroid_ub_provision() {
   marker="$(__vscodroid_ub_root)/var/lib/vscodroid/provisioned/$group"
   [ -f "$marker" ] && return 0
   echo "vscodroid: first use of '$cmd': installing $pkgs into the Ubuntu system. This takes a few minutes, once." >&2
-  if __vscodroid_ub_exec apt-get update -qq && __vscodroid_ub_exec apt-get install -y -qq --no-install-recommends $pkgs; then
+  if __vscodroid_ub_apt update -qq && __vscodroid_ub_apt install -y -qq --no-install-recommends $pkgs; then
     mkdir -p "${marker%/*}" && : > "$marker"
     return 0
   fi
@@ -135,6 +168,7 @@ __vscodroid_ub_cmd() {
     echo "vscodroid: '$n' runs inside the Ubuntu system, which is not installed yet. Run:  ubuntu setup" >&2
     return 127
   fi
+  __vscodroid_ub_git_bg
   if ! __vscodroid_ub_provision "$n"; then
     if [ "${__vscodroid_ub_nat[$n]-0}" = 1 ]; then "__vscodroid_ub_orig_$n" "$@"; return $?; fi
     return 1
@@ -146,6 +180,13 @@ __vscodroid_ub_cmd() {
         __vscodroid_ub_venv "$@"; st=$?
         [ $st -ne 2 ] && return $st
       fi ;;
+  esac
+  case "$n" in
+    apt|apt-get|dpkg)
+      __vscodroid_ub_lock || { echo "vscodroid: another package install is still running" >&2; return 1; }
+      __vscodroid_ub_exec "$n" "$@"; st=$?
+      __vscodroid_ub_unlock
+      return $st ;;
   esac
   __vscodroid_ub_exec "$n" "$@"; st=$?
   case "$n" in
@@ -246,8 +287,8 @@ __vscodroid_ub_gui() {
       marker="$root/var/lib/vscodroid/provisioned/gui"
       if [ ! -f "$marker" ]; then
         echo "vscodroid: first use of the graphical desktop: installing it into the Ubuntu system. This takes several minutes, once." >&2
-        if ! { __vscodroid_ub_exec apt-get update -qq &&
-               __vscodroid_ub_exec apt-get install -y -qq --no-install-recommends \
+        if ! { __vscodroid_ub_apt update -qq &&
+               __vscodroid_ub_apt install -y -qq --no-install-recommends \
                  tigervnc-standalone-server novnc websockify openbox xterm x11-utils python3-tk; }; then
           echo "vscodroid: could not install the desktop (is the phone online?)" >&2; return 1
         fi
@@ -294,8 +335,8 @@ __vscodroid_ub_x86() {
     setup)
       if [ ! -f "$marker" ]; then
         echo "vscodroid: installing qemu into the Ubuntu system (a few minutes, once)..." >&2
-        __vscodroid_ub_exec apt-get update -qq &&
-          __vscodroid_ub_exec apt-get install -y -qq --no-install-recommends qemu-user-static || {
+        __vscodroid_ub_apt update -qq &&
+          __vscodroid_ub_apt install -y -qq --no-install-recommends qemu-user-static || {
           echo "vscodroid: could not install qemu (is the phone online?)" >&2; return 1; }
         mkdir -p "${marker%/*}" && : > "$marker"
       fi
@@ -326,9 +367,205 @@ __vscodroid_ub_x86() {
   esac
 }
 
+# ---- repair / reinstall Ubuntu ----------------------------------------------------
+# `ubuntu reset` wipes the Ubuntu system (every package installed in it) and
+# installs it again. It removes only the Ubuntu folders inside the app's private
+# storage. Projects in shared storage are never touched, and neither are the Git
+# settings and sign-in (they live outside the Ubuntu system, see below).
+# `ubuntu repair` looks first, and only reinstalls if Ubuntu is damaged.
+#   --yes   skip the question (for scripts)
+__vscodroid_ub_setup() { bash "$HOME/.vscodroid/proot-test.sh" ubuntu; }
+
+__vscodroid_ub_healthy() {
+  __vscodroid_ub_ready || return 1
+  __vscodroid_ub_exec /bin/true >/dev/null 2>&1 || return 1
+  local audit
+  audit=$(__vscodroid_ub_exec dpkg --audit 2>&1) || return 1
+  [ -z "$audit" ]
+}
+
+__vscodroid_ub_reset() {
+  local mode=$1 a yes=0 root x86 ans tty
+  shift
+  for a in "$@"; do case "$a" in -y|--yes) yes=1 ;; esac; done
+  root=$(__vscodroid_ub_root)
+  # Only the Ubuntu folders in private storage may ever be removed.
+  case "$root" in
+    /storage/*|/sdcard/*|/mnt/*|""|/) echo "vscodroid: refusing to reset '$root': it is not in the app's private storage" >&2; return 1 ;;
+    */proot/ubuntu) ;;
+    *) echo "vscodroid: refusing to reset '$root': not the Ubuntu system folder" >&2; return 1 ;;
+  esac
+  x86="${root%/*}/ubuntu-amd64"
+
+  if [ "$mode" = repair ] && __vscodroid_ub_healthy; then
+    echo "vscodroid: Ubuntu looks healthy. To reinstall it anyway, run:  ubuntu reset"
+    return 0
+  fi
+  if [ ! -d "$root" ]; then
+    echo "vscodroid: Ubuntu is not installed; installing it."
+    __vscodroid_ub_setup && __vscodroid_ub_git_bg
+    return $?
+  fi
+
+  if [ $yes -eq 0 ]; then
+    tty=${VSCODROID_UB_TTY:-/dev/tty}
+    if [ ! -r "$tty" ] || { [ -z "${VSCODROID_UB_TTY-}" ] && [ ! -t 0 ]; }; then
+      echo "vscodroid: this asks a question, so it needs a terminal. In a script, add --yes." >&2
+      return 1
+    fi
+    printf '%s ' "Warning: This will wipe all packages installed inside Ubuntu. Your files in /VSCodroid will NOT be deleted. Proceed? [Y/n]"
+    read -r ans < "$tty"
+    case "$ans" in ""|y|Y|yes|YES|Yes) ;; *) echo "vscodroid: cancelled. Nothing was changed."; return 1 ;; esac
+  fi
+
+  # Nothing may be running in Ubuntu or installing into it while it is removed.
+  if [ -f "$HOME/.vscodroid/gui.pid" ]; then __vscodroid_ub_gui stop >/dev/null 2>&1; fi
+  __vscodroid_ub_lock || { echo "vscodroid: a package install is still running; try again in a minute" >&2; return 1; }
+  echo "vscodroid: removing the Ubuntu system..."
+  # Make read-only folders removable; rm does not follow links, so a link inside
+  # Ubuntu that points at a project is removed, not the project.
+  chmod -R u+rwX "$root" 2>/dev/null
+  rm -rf "$root"
+  if [ -d "$x86" ]; then chmod -R u+rwX "$x86" 2>/dev/null; rm -rf "$x86"; fi
+  __vscodroid_ub_unlock
+  if [ -e "$root" ]; then echo "vscodroid: could not remove all of $root" >&2; return 1; fi
+
+  echo "vscodroid: installing Ubuntu again (a few minutes)..."
+  if __vscodroid_ub_setup; then
+    echo "vscodroid: Ubuntu is ready again. Your project files were not touched. Python virtual environments made before need to be created again."
+    __vscodroid_ub_git_bg
+    return 0
+  fi
+  echo "vscodroid: the reinstall did not finish. Run  ubuntu reset  again when the phone is online." >&2
+  return 1
+}
+
+# ---- Git in Ubuntu --------------------------------------------------------------
+# Git inside Ubuntu (what cargo, go, pip and the Ubuntu shell use) is installed in
+# the background the first time Ubuntu is ready. Its settings and its stored sign-in
+# live in ~/.vscodroid/ubuntu-git in private storage, shown inside Ubuntu as
+# /root/.vscodroid-git: never in a project, never in a backup, and kept when Ubuntu is
+# reinstalled. The sign-in uses git's own `store` helper pointed at that private
+# file: it is a plain file protected by the app's sandbox (mode 600), NOT encrypted;
+# see docs/ANDROID_LIMITATION_LOG.md for why nothing stronger fits here.
+#
+# The phone's own git (Source Control, the terminal's `git`) signs in through VS Code
+# and is unaffected by any of this.
+__vscodroid_ub_git_configure() {
+  local d cfg name email
+  d=$(__vscodroid_ub_git_dir); cfg="$d/gitconfig"
+  ( umask 077; mkdir -p "$d" ) && chmod 700 "$d" 2>/dev/null
+  __vscodroid_orig_git config --file "$cfg" credential.helper 'store --file /root/.vscodroid-git/credentials' || return 1
+  __vscodroid_orig_git config --file "$cfg" init.defaultBranch main
+  # Files in shared storage appear to belong to another user; without this git
+  # refuses them as "dubious ownership".
+  __vscodroid_orig_git config --file "$cfg" safe.directory '*'
+  name=$(__vscodroid_orig_git config --global user.name 2>/dev/null)
+  email=$(__vscodroid_orig_git config --global user.email 2>/dev/null)
+  [ -z "$name" ]  || __vscodroid_orig_git config --file "$cfg" user.name "$name"
+  [ -z "$email" ] || __vscodroid_orig_git config --file "$cfg" user.email "$email"
+  chmod 600 "$cfg" 2>/dev/null
+  return 0
+}
+
+__vscodroid_ub_git_bootstrap() {
+  local root marker log
+  root=$(__vscodroid_ub_root)
+  marker="$root/var/lib/vscodroid/provisioned/git"
+  log="$HOME/.vscodroid/git-setup.log"
+  __vscodroid_ub_git_configure
+  [ -f "$marker" ] && return 0
+  {
+    echo "$(date '+%F %T') installing git into Ubuntu"
+    if __vscodroid_ub_apt update -qq &&
+       __vscodroid_ub_apt install -y -qq --no-install-recommends git ca-certificates openssh-client &&
+       __vscodroid_ub_exec git --version; then
+      mkdir -p "${marker%/*}" && : > "$marker"
+      echo "done"
+    else
+      echo "failed (will be tried again next time)"
+    fi
+  } >> "$log" 2>&1
+}
+
+# Start it once per shell, without waiting, when Ubuntu is ready and git is not there yet.
+__vscodroid_ub_git_bg() {
+  [ -n "${__vscodroid_ub_git_started-}" ] && return 0
+  __vscodroid_ub_ready || return 0
+  [ -f "$(__vscodroid_ub_root)/var/lib/vscodroid/provisioned/git" ] && return 0
+  __vscodroid_ub_git_started=1
+  ( trap '' HUP; __vscodroid_ub_git_bootstrap ) >/dev/null 2>&1 &
+  echo "vscodroid: Git is being set up inside Ubuntu in the background (log: ~/.vscodroid/git-setup.log)" >&2
+  return 0
+}
+
+# ubuntu git-login [host]: the token is typed hidden and handed to git on its
+# standard input, so it never appears in a command line, shell history or a project.
+__vscodroid_ub_git_login() {
+  local host=${1:-github.com} d user token
+  d=$(__vscodroid_ub_git_dir)
+  __vscodroid_ub_git_configure || return 1
+  printf 'Username for %s: ' "$host" >&2; read -r user
+  printf 'Token (typing is hidden): ' >&2; read -rs token; echo >&2
+  if [ -z "$user" ] || [ -z "$token" ]; then echo "vscodroid: cancelled; nothing was saved" >&2; return 1; fi
+  printf 'protocol=https\nhost=%s\nusername=%s\npassword=%s\n\n' "$host" "$user" "$token" |
+    GIT_CONFIG_GLOBAL=/dev/null __vscodroid_orig_git -c "credential.helper=store --file $d/credentials" credential approve || return 1
+  chmod 600 "$d/credentials" 2>/dev/null
+  token=
+  echo "vscodroid: saved for $host in the app's private storage (not in any project)."
+}
+
+__vscodroid_ub_git_logout() {
+  local host=${1:-github.com} d
+  d=$(__vscodroid_ub_git_dir)
+  [ -f "$d/credentials" ] || { echo "vscodroid: nothing saved"; return 0; }
+  printf 'protocol=https\nhost=%s\n\n' "$host" |
+    GIT_CONFIG_GLOBAL=/dev/null __vscodroid_orig_git -c "credential.helper=store --file $d/credentials" credential reject
+  echo "vscodroid: sign-in for $host removed"
+}
+
+__vscodroid_ub_git_check() {
+  local d root repo
+  d=$(__vscodroid_ub_git_dir); root=$(__vscodroid_ub_root)
+  echo "phone git:   $(__vscodroid_orig_git --version 2>&1)"
+  if [ -f "$root/var/lib/vscodroid/provisioned/git" ]; then
+    echo "Ubuntu git:  $(__vscodroid_ub_exec git --version 2>&1)"
+  else
+    echo "Ubuntu git:  not installed yet (see ~/.vscodroid/git-setup.log)"
+  fi
+  echo "helper:      $(__vscodroid_orig_git config --file "$d/gitconfig" credential.helper 2>/dev/null || echo 'not configured')"
+  if [ -s "$d/credentials" ]; then echo "sign-in:     saved (private storage, $(stat -c %a "$d/credentials" 2>/dev/null))"; else echo "sign-in:     none saved"; fi
+  repo=$(__vscodroid_orig_git rev-parse --git-dir 2>/dev/null)
+  if [ -n "$repo" ] && grep -Eq '://[^/@[:space:]]+:[^/@[:space:]]+@|://(gh[pousr]_|github_pat_)[A-Za-z0-9_]+@' "$repo/config" 2>/dev/null; then
+    echo "WARNING:     this repository's remote address contains a password or token. Change it with:  git remote set-url origin https://github.com/OWNER/REPO.git"
+  fi
+}
+
+# A token typed into a remote address ends up in .git/config, inside the project.
+__vscodroid_token_in_args() {
+  local a
+  for a in "$@"; do
+    case "$a" in
+      *://*:*@*|*://gh[pousr]_*@*|*://github_pat_*@*)
+        if printf '%s' "$a" | grep -Eq '://[^/@[:space:]]+:[^/@[:space:]]+@|://(gh[pousr]_|github_pat_)[A-Za-z0-9_]+@'; then
+          echo "vscodroid: that address contains a password or token. Git would write it into .git/config, inside your project." >&2
+          echo "          Use the plain address (https://github.com/OWNER/REPO.git) and sign in instead: through VS Code (Source Control)," >&2
+          echo "          or for Ubuntu's git:  ubuntu git-login   (override: VSCODROID_NO_TOKEN_GUARD=1)" >&2
+          return 0
+        fi ;;
+    esac
+  done
+  return 1
+}
+
 ubuntu() {
   case "${1-}" in
-    setup) bash "$HOME/.vscodroid/proot-test.sh" ubuntu; return $? ;;
+    setup) __vscodroid_ub_setup && __vscodroid_ub_git_bg; return $? ;;
+    reset|repair)
+      __vscodroid_ub_reset "$@"; return $? ;;
+    git-login)  shift; __vscodroid_ub_git_login "$@"; return $? ;;
+    git-logout) shift; __vscodroid_ub_git_logout "$@"; return $? ;;
+    git-check)  __vscodroid_ub_git_check; return $? ;;
     x86)
       shift
       if ! __vscodroid_ub_ready; then echo "vscodroid: the Ubuntu system is not installed yet. Run:  ubuntu setup" >&2; return 1; fi
@@ -341,6 +578,10 @@ ubuntu() {
       echo "ubuntu            open a shell inside the Ubuntu system"
       echo "ubuntu CMD ...    run CMD there (ubuntu ./hello runs a built program)"
       echo "ubuntu setup      install the Ubuntu system (once)"
+      echo "ubuntu repair     check Ubuntu and reinstall it only if it is damaged"
+      echo "ubuntu reset      wipe and reinstall Ubuntu (projects are not touched)"
+      echo "ubuntu git-login  save a GitHub token for Ubuntu's git (typed hidden)"
+      echo "ubuntu git-logout / git-check"
       echo "ubuntu gui start  graphical desktop for Tkinter/Pygame (experimental)"
       echo "ubuntu x86 setup  run Intel (x86_64) programs through qemu (experimental)"
       echo "native CMD ...    run CMD on the phone itself, not in Ubuntu"
@@ -350,6 +591,7 @@ ubuntu() {
     echo "vscodroid: the Ubuntu system is not installed yet. Run:  ubuntu setup" >&2
     return 1
   fi
+  __vscodroid_ub_git_bg
   if [ $# -eq 0 ]; then __vscodroid_ub_exec /bin/bash -l; return $?; fi
   case "$1" in
     */*) if [ -f "$1" ] && __vscodroid_ub_on_shared "$(cd "${1%/*}" 2>/dev/null && pwd -P)/${1##*/}"; then
@@ -378,3 +620,21 @@ for __n in gcc g++ cc c++ cpp make cmake python python3 pip pip3 cargo rustc go 
   eval "$__n() { __vscodroid_ub_cmd $__n \"\$@\"; }"
 done
 unset __n
+
+# ---- keep tokens out of project files -------------------------------------------
+# The phone's own `git` refuses a remote address that carries a password or token
+# (VSCODROID_NO_TOKEN_GUARD=1 turns this off).
+if declare -F git >/dev/null 2>&1; then
+  eval "$(declare -f git | sed '1s/^git *()/__vscodroid_orig_git ()/')"
+else
+  __vscodroid_orig_git() { command git "$@"; }
+fi
+git() {
+  if [ -z "${VSCODROID_NO_TOKEN_GUARD-}" ]; then
+    case "${1-}" in
+      remote) case "${2-}" in add|set-url) __vscodroid_token_in_args "${@:3}" && return 1 ;; esac ;;
+      clone|fetch|pull|push|ls-remote) __vscodroid_token_in_args "${@:2}" && return 1 ;;
+    esac
+  fi
+  __vscodroid_orig_git "$@"
+}

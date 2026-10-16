@@ -2,7 +2,7 @@
   "name": "vscodroid-saf-bridge",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "publisher": "vscodroid",
   "engines": {
     "vscode": "^1.96.0"
@@ -19,6 +19,10 @@
       {
         "command": "vscodroid.openFolderFromDevice",
         "title": "%command.openFolderFromDevice%"
+      },
+      {
+        "command": "vscodroid.reinstallLinux",
+        "title": "%command.reinstallLinux%"
       },
       {
         "command": "vscodroid.openRecentFolder",

@@ -545,6 +545,10 @@ managers. Work that has to survive either belongs in a folder opened through the
   kept in `~/proot/ubuntu`. Programs built in shared storage run through a private copy.
 - After a dev server starts, the wrapper opens it in the phone's browser; `ubuntu gui start` shows a
   virtual screen (experimental).
+- `ubuntu repair` / `ubuntu reset` (in `assets/ubuntu-env.sh`) remove and reinstall only `~/proot/ubuntu*` in private
+  storage; the saf-bridge extension adds the Command Palette entry that runs it in a terminal.
+- Ubuntu's Git is installed in the background and configured through `~/.vscodroid/ubuntu-git` (bound into Ubuntu, kept
+  across a reset). Sign-in is git's `store` helper on that private file. Package installs share one lock.
 
 ---
 
