@@ -40,7 +40,15 @@ VSCODE_VERSION="${VSCODE_VERSION:-$(cat "$ROOT_DIR/VSCODE_VERSION")}"
 # nothing read.
 VSCODE_COMMIT="${VSCODE_COMMIT:-$(cat "$ROOT_DIR/VSCODE_COMMIT")}"
 ARCH="${ARCH:-arm64}"
-REPO="${REPO:-rmyndharis/VSCodroid}"
+# Which repository's server-<version> release to fetch. In GitHub Actions that is
+# the repository the job is running in (GITHUB_REPOSITORY), because the "Build
+# Code - OSS server" workflow publishes the release THERE. It used to default to
+# rmyndharis/VSCodroid in every case, so a fork built its APK from the original
+# author's server tarball, which does not carry the fork's patches, and the
+# patch check below failed no matter how often the fork rebuilt its own server.
+# Outside Actions it still falls back to rmyndharis/VSCodroid; set REPO to use
+# another one.
+REPO="${REPO:-${GITHUB_REPOSITORY:-rmyndharis/VSCodroid}}"
 
 TARBALL_NAME="vscode-reh-web-linux-$ARCH-$VSCODE_VERSION.tar.gz"
 TARBALL="$ROOT_DIR/server/$TARBALL_NAME"
