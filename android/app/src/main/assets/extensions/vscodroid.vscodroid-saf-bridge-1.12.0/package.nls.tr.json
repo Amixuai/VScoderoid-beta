@@ -2,6 +2,7 @@
   "displayName": "VSCodroid Android Köprüsü",
   "description": "Android'e uzanan komutlar: cihaz klasörleri, tarayıcı, SSH anahtarları, depolama, hakkında",
   "command.openFolderFromDevice": "VSCodroid: Cihazdan klasör aç",
+  "command.reinstallLinux": "VSCodroid: Linux ortamını yeniden yükle",
   "command.openRecentFolder": "VSCodroid: Son kullanılan klasörü aç",
   "command.openInBrowser": "VSCodroid: Tarayıcıda aç",
   "command.generateSshKey": "VSCodroid: SSH anahtarı oluştur",

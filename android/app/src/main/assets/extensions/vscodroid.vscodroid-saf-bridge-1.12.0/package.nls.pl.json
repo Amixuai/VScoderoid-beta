@@ -2,6 +2,7 @@
   "displayName": "VSCodroid Most do Androida",
   "description": "Polecenia sięgające do Androida: foldery w urządzeniu, przeglądarka, klucze SSH, pamięć, informacje",
   "command.openFolderFromDevice": "VSCodroid: Otwórz folder z urządzenia",
+  "command.reinstallLinux": "VSCodroid: Zainstaluj ponownie środowisko Linux",
   "command.openRecentFolder": "VSCodroid: Otwórz ostatni folder",
   "command.openInBrowser": "VSCodroid: Otwórz w przeglądarce",
   "command.generateSshKey": "VSCodroid: Wygeneruj klucz SSH",

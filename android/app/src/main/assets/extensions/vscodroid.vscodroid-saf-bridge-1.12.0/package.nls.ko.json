@@ -2,6 +2,7 @@
   "displayName": "VSCodroid Android 브리지",
   "description": "Android에 닿는 명령: 기기 폴더, 브라우저, SSH 키, 저장 공간, 정보",
   "command.openFolderFromDevice": "VSCodroid: 기기에서 폴더 열기",
+  "command.reinstallLinux": "VSCodroid: Linux 환경 다시 설치",
   "command.openRecentFolder": "VSCodroid: 최근 폴더 열기",
   "command.openInBrowser": "VSCodroid: 브라우저에서 열기",
   "command.generateSshKey": "VSCodroid: SSH 키 만들기",

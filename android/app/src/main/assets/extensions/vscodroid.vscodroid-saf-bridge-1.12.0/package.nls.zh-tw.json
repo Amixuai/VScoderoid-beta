@@ -2,6 +2,7 @@
   "displayName": "VSCodroid Android 橋接",
   "description": "觸及 Android 的命令：裝置資料夾、瀏覽器、SSH 金鑰、儲存空間、關於",
   "command.openFolderFromDevice": "VSCodroid: 開啟裝置上的資料夾",
+  "command.reinstallLinux": "VSCodroid: 重新安裝 Linux 環境",
   "command.openRecentFolder": "VSCodroid: 開啟最近的資料夾",
   "command.openInBrowser": "VSCodroid: 在瀏覽器中開啟",
   "command.generateSshKey": "VSCodroid: 產生 SSH 金鑰",

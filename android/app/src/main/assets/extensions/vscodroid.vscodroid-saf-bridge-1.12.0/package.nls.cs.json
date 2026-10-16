@@ -2,6 +2,7 @@
   "displayName": "VSCodroid Most do Androidu",
   "description": "Příkazy, které sahají do Androidu: složky v zařízení, prohlížeč, klíče SSH, úložiště, o aplikaci",
   "command.openFolderFromDevice": "VSCodroid: Otevřít složku ze zařízení",
+  "command.reinstallLinux": "VSCodroid: Přeinstalovat prostředí Linux",
   "command.openRecentFolder": "VSCodroid: Otevřít nedávnou složku",
   "command.openInBrowser": "VSCodroid: Otevřít v prohlížeči",
   "command.generateSshKey": "VSCodroid: Vytvořit klíč SSH",

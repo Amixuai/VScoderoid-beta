@@ -2,6 +2,7 @@
   "displayName": "VSCodroid Ponte Android",
   "description": "Comandi che raggiungono Android: cartelle del dispositivo, browser, chiavi SSH, spazio, informazioni",
   "command.openFolderFromDevice": "VSCodroid: Apri una cartella dal dispositivo",
+  "command.reinstallLinux": "VSCodroid: Reinstalla l'ambiente Linux",
   "command.openRecentFolder": "VSCodroid: Apri una cartella recente",
   "command.openInBrowser": "VSCodroid: Apri nel browser",
   "command.generateSshKey": "VSCodroid: Genera una chiave SSH",

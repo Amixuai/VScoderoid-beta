@@ -2,6 +2,7 @@
   "displayName": "VSCodroid Android 桥接",
   "description": "触达 Android 的命令：设备文件夹、浏览器、SSH 密钥、存储、关于",
   "command.openFolderFromDevice": "VSCodroid: 打开设备上的文件夹",
+  "command.reinstallLinux": "VSCodroid: 重新安装 Linux 环境",
   "command.openRecentFolder": "VSCodroid: 打开最近的文件夹",
   "command.openInBrowser": "VSCodroid: 在浏览器中打开",
   "command.generateSshKey": "VSCodroid: 生成 SSH 密钥",

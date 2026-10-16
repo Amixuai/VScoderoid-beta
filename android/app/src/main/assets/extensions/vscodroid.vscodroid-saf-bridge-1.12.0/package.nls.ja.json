@@ -2,6 +2,7 @@
   "displayName": "VSCodroid Android ブリッジ",
   "description": "Android に届くコマンド: デバイスのフォルダー、ブラウザー、SSH キー、ストレージ、バージョン情報",
   "command.openFolderFromDevice": "VSCodroid: デバイスのフォルダーを開く",
+  "command.reinstallLinux": "VSCodroid: Linux 環境を再インストール",
   "command.openRecentFolder": "VSCodroid: 最近使ったフォルダーを開く",
   "command.openInBrowser": "VSCodroid: ブラウザーで開く",
   "command.generateSshKey": "VSCodroid: SSH キーを作成",
