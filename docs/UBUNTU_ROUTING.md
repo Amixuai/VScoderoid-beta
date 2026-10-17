@@ -74,3 +74,16 @@ is git's own `store`, pointed at that private file. `ubuntu git-login | git-logo
 installs (first use of a tool, the Git setup, `ubuntu gui`, your own `apt`) take turns through one lock, because dpkg
 allows one at a time. The phone's `git` refuses remote addresses that carry a token (`VSCODROID_NO_TOKEN_GUARD=1` turns
 that off).
+
+## Ctrl+C and process groups
+
+A foreground command typed in the terminal runs under a guest shell with job control, so it has its own process group
+and the terminal; Ctrl+C reaches that command and not proot. Programs with their own interrupt handling run it;
+`ubuntu` at its prompt only cancels the line. Off with `VSCODROID_UB_NO_JOB=1`. `--kill-on-exit` still ends everything
+when proot ends. A program just built (`gcc ... -o name`, `rustc`, `make`) can be started as `name` by its path as typed,
+by its absolute path (Code Runner does this), or as `./name`; a bare name is never defined.
+
+## Tasks and extensions
+
+`type: shell` tasks and Code Runner (set to run in the terminal) run commands through the routing. `type: process` tasks
+that name `gcc` directly cannot work (see ANDROID_LIMITATION_LOG section 5).

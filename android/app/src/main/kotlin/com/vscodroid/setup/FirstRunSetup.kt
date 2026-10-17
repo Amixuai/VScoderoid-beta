@@ -3171,6 +3171,7 @@ claude() {
                     }
                 },
                 "git.path": "$nativeLibDir/libgit.so",
+                "code-runner.runInTerminal": true,
                 "extensions.verifySignature": false,
                 "telemetry.telemetryLevel": "off",
                 "telemetry.enableTelemetry": false,

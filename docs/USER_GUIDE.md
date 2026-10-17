@@ -1425,3 +1425,17 @@ Read it before you share it. The server log can name your files and folders, and
 ---
 
 *VSCodroid is built from the MIT-licensed Code - OSS source code. Not affiliated with or endorsed by Microsoft Corporation. "Visual Studio Code" and "VS Code" are trademarks of Microsoft. Uses Open VSX extension registry, not Microsoft Marketplace.*
+
+### Build tasks, Code Runner and NPM Scripts
+
+Standard `.vscode/tasks.json` tasks of type `shell` run in the terminal's shell, so `gcc`, `g++`, `make`, `python`,
+`cargo` and `npm` in them run the way they do when you type them (compilers and Python in Ubuntu). Run them with
+Terminal > Run Build Task. Output and errors appear in the task terminal, and a failing task does not stop the editor.
+Tasks of type `process` that name a compiler directly are not supported on Android; use `shell`. Code Runner is set to
+use the integrated terminal. NPM Scripts runs `npm` tasks as usual.
+
+### Stopping a program (Ctrl+C)
+
+Tap **Ctrl** on the extra key row, then **c**, to stop the running program. It works for `npm start`, Python servers and
+programs run in Ubuntu: the program gets the interrupt itself, as on a PC, and the terminal stays usable. At the
+`ubuntu` prompt it only cancels the line. In the editor the same keys copy text.

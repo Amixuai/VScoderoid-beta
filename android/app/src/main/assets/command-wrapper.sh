@@ -354,9 +354,12 @@ __vscodroid_port_arg() {
   return 1
 }
 
+# The watcher runs only while the flag file exists; the command's end (or Ctrl+C)
+# removes it, so nothing is left polling after a server is stopped.
 __vscodroid_preview_watch() {
-  local waited=0 p
-  while [ $waited -lt "${VSCODROID_PREVIEW_SECONDS:-120}" ]; do
+  local flag=$1 waited=0 p
+  shift
+  while [ -e "$flag" ] && [ $waited -lt "${VSCODROID_PREVIEW_SECONDS:-120}" ]; do
     for p in "$@"; do
       if __vscodroid_port_open "$p"; then
         if __vscodroid_open_url "http://localhost:$p"; then
@@ -380,10 +383,18 @@ __vscodroid_with_preview() {
   [ -n "$hint" ] && ports=$hint
   local -a fresh=()
   for p in $ports; do __vscodroid_port_open "$p" || fresh+=("$p"); done
-  if [ ${#fresh[@]} -gt 0 ]; then
-    ( __vscodroid_preview_watch "${fresh[@]}" & ) >/dev/null 2>&1
-  fi
-  "$@"
+  if [ ${#fresh[@]} -eq 0 ]; then "$@"; return $?; fi
+  local flag st old
+  flag=$(mktemp "${TMPDIR:-/tmp}/vscodroid-pv.XXXXXX" 2>/dev/null) || { "$@"; return $?; }
+  ( __vscodroid_preview_watch "$flag" "${fresh[@]}" & ) >/dev/null 2>&1
+  # With a trap on INT the shell carries on after Ctrl+C stopped the command, so the
+  # cleanup below always runs and the prompt comes back.
+  old=$(trap -p INT)
+  trap "rm -f '$flag'" INT
+  "$@"; st=$?
+  rm -f "$flag"
+  if [ -n "$old" ]; then eval "$old"; else trap - INT; fi
+  return $st
 }
 
 # Keep what npm, python3 and python are now (they may already be wrappers).

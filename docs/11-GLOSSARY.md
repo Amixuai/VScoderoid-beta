@@ -216,3 +216,6 @@ A small program Git calls to fetch or save a username and password. `store` keep
 
 **`ubuntu reset` / `ubuntu repair`**
 Commands that reinstall the Ubuntu system in private storage without touching projects.
+
+**Process group / job control**
+A group of processes the terminal signals together (Ctrl+C goes to the foreground group). A shell with job control gives each command its own group.

@@ -34,6 +34,7 @@ line records when the document was first written, not when it last changed; see
 | [proot prototype](./PROOT_PROTOTYPE.md) | The test that proves proot and Ubuntu run on a phone |
 | [Android limitation log](./ANDROID_LIMITATION_LOG.md) | Investigation record: Ubuntu recovery, Git, where a token is kept |
 | [Device tests: recovery and Git](./DEVICE_TESTS_RECOVERY_GIT.md) | Phone tests, none run yet |
+| [Device tests: build and Ctrl+C](./DEVICE_TESTS_BUILD_CTRLC.md) | Phone tests for tasks, Code Runner, NPM Scripts, Ctrl+C |
 | [The last 5%](./FINAL_5_PERCENT.md) | x86, USB, Docker, GUI, search: status and what each needs |
 
 ### Unnumbered References

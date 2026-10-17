@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Ctrl+C: a foreground command run in Ubuntu now gets its own process group (guest job control), so the interrupt reaches the command, not proot; `ubuntu` at its prompt no longer risks the session. The browser-preview watcher stops when its command ends or is interrupted. A job line no longer prints when the Git setup starts in the background.
+- Built programs can be started by their absolute path (what Code Runner uses) as well as `./name`; `rustc` output is covered. `code-runner.runInTerminal` is on by default.
 - `ubuntu repair` / `ubuntu reset` (with a "Proceed? [Y/n]" question) and the Command Palette entry "VSCodroid: Reinstall Linux Environment" (saf-bridge 1.12.0). Only the Ubuntu system in private storage is replaced.
 - Git is installed inside Ubuntu in the background; `ubuntu git-login | git-logout | git-check`; sign-in kept in private storage and across a reset; the phone's `git` refuses remote addresses that carry a token.
 - All Ubuntu package installs share one lock.

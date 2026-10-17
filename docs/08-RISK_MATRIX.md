@@ -335,3 +335,11 @@ The decisions these risks settled, and what each one buys:
 | A Git token ends up in a project | Medium | High | Address guard in the phone's `git`; token typed hidden and passed on stdin; `ubuntu git-check` warns |
 | Ubuntu git sign-in is a plain file | Certain | Medium | Private storage, mode 600, excluded from backups; stronger storage needs Android Keystore work (ANDROID_LIMITATION_LOG) |
 | Two package installs collide | Medium | Low | One lock for all of ours; a dead owner's lock is cleared |
+
+## Added 2026-10-17 (build tasks, Ctrl+C)
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| Job control under proot is refused on some phones | Low | Medium | `VSCODROID_UB_NO_JOB=1` restores the older behaviour; device test C1/C3 |
+| `type: process` tasks cannot find a compiler | Certain | Medium | Documented; use shell tasks (SELinux blocks a program file in app storage) |
+| A program with spaces in its path gets no `./name` | Medium | Low | `ubuntu ./prog` works |

@@ -79,10 +79,27 @@ __vscodroid_ub_exec() {
   [ "$(cat "$HOME/.vscodroid/proot-mode" 2>/dev/null)" = noseccomp ] && pre=(env PROOT_NO_SECCOMP=1)
   [ -f "$root/etc/resolv.conf" ] || { rm -f "$root/etc/resolv.conf"; printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > "$root/etc/resolv.conf"; }
 
+  # Ctrl+C. The terminal sends SIGINT to the foreground process group. A command
+  # started straight under proot shares proot's group, and proot answers SIGINT by
+  # killing everything it runs at once, so a program that handles Ctrl+C itself (a
+  # Python KeyboardInterrupt, a server's clean shutdown) never gets the chance, and
+  # at an Ubuntu prompt the whole session would die. So a foreground command from
+  # the terminal is started by a guest shell with job control, which gives the
+  # command its OWN process group and the terminal: Ctrl+C then reaches only that
+  # command, as on a PC, and proot is not signalled. Background and piped calls, and
+  # calls with no terminal, run as before. VSCODROID_UB_NO_JOB=1 turns this off.
+  local -a run=("$@")
+  if [ -n "${VSCODROID_UB_FG-}" ] && [ -z "${VSCODROID_UB_NO_JOB-}" ] && [ -t 0 ] && [ "${BASHPID:-$$}" = "$$" ]; then
+    run=(/bin/bash -c 'set -m; "$@"; exit $?' vscodroid-run "$@")
+  fi
+
   ${pre[@]+"${pre[@]}"} "$VSCODROID_PROOT" --link2symlink -0 -r "$root" "${bind[@]}" \
     --kernel-release=6.2.1-vscodroid -w "$cwd" --kill-on-exit \
-    /usr/bin/env -i "${envv[@]}" "$@"
+    /usr/bin/env -i "${envv[@]}" "${run[@]}"
 }
+
+# A command typed in the terminal: runs in the foreground with its own process group.
+__vscodroid_ub_fg() { VSCODROID_UB_FG=1 __vscodroid_ub_exec "$@"; }
 
 # ---- one package install at a time ------------------------------------------------
 # Several things install packages: the first use of a tool, the Git setup that runs
@@ -184,13 +201,21 @@ __vscodroid_ub_cmd() {
   case "$n" in
     apt|apt-get|dpkg)
       __vscodroid_ub_lock || { echo "vscodroid: another package install is still running" >&2; return 1; }
-      __vscodroid_ub_exec "$n" "$@"; st=$?
+      __vscodroid_ub_fg "$n" "$@"; st=$?
       __vscodroid_ub_unlock
       return $st ;;
   esac
-  __vscodroid_ub_exec "$n" "$@"; st=$?
+  __vscodroid_ub_fg "$n" "$@"; st=$?
   case "$n" in
-    gcc|g++|cc|c++|make|cmake) [ $st -eq 0 ] && __vscodroid_ub_scan ;;
+    gcc|g++|cc|c++|rustc|make|cmake)
+      if [ $st -eq 0 ]; then
+        # The program just built can be started the way a PC does: by the path it was
+        # given (-o), by its absolute path (what Code Runner uses), or as ./name.
+        local a prev="" out=""
+        for a in "$@"; do [ "$prev" = -o ] && out=$a; prev=$a; done
+        [ -n "$out" ] && __vscodroid_ub_define_prog "$out"
+        __vscodroid_ub_scan
+      fi ;;
   esac
   return $st
 }
@@ -225,7 +250,25 @@ __vscodroid_ub_run_file() {
   if [ ! -f "$dst" ] || [ "$abs" -nt "$dst" ]; then
     mkdir -p "${dst%/*}" && cp -f "$abs" "$dst" && chmod 755 "$dst" || return 1
   fi
-  __vscodroid_ub_exec "/tmp/vsc-run/$id/$name" "$@"
+  __vscodroid_ub_fg "/tmp/vsc-run/$id/$name" "$@"
+}
+
+# One built program, under every name it can be started by: as typed, absolute, ./name.
+__vscodroid_ub_define_prog() {
+  local p=$1 abs n here
+  case "$p" in
+    */*) abs="$(cd "${p%/*}" 2>/dev/null && pwd -P)/${p##*/}" ;;
+    *) abs="$(pwd -P 2>/dev/null || pwd)/$p" ;;
+  esac
+  [ -f "$abs" ] && __vscodroid_ub_is_elf "$abs" || return 0
+  here=$(pwd -P 2>/dev/null)
+  for n in "$p" "$abs" "./${abs##*/}"; do
+    [ "$n" = "./${abs##*/}" ] && [ "${abs%/*}" != "$here" ] && continue
+    case "$n" in ""|*[!A-Za-z0-9_./+-]*) continue ;; esac
+    # Never a bare name: `-o ls` must not turn `ls` into this program.
+    case "$n" in */*) ;; *) continue ;; esac
+    eval "function $n { __vscodroid_ub_run_file '$abs' \"\$@\"; }"
+  done
 }
 
 # Define ./name for each program found here and in the usual build folders.
@@ -240,7 +283,7 @@ __vscodroid_ub_scan() {
       *.*|*[!A-Za-z0-9_+-]*) continue ;;
     esac
     __vscodroid_ub_is_elf "$f" || continue
-    eval "function $f { __vscodroid_ub_run_file '$f' \"\$@\"; }"
+    __vscodroid_ub_define_prog "$f"
   done
   return 0
 }
@@ -361,7 +404,7 @@ __vscodroid_ub_x86() {
       dst="$root/tmp/vsc-run/$id/${abs##*/}"
       mkdir -p "${dst%/*}" && cp -f "$abs" "$dst" && chmod 755 "$dst" || return 1
       VSCODROID_UB_EXTRA_BIND="$x86root:/opt/amd64" \
-        __vscodroid_ub_exec qemu-x86_64-static -L /opt/amd64 "/tmp/vsc-run/$id/${abs##*/}" "$@"
+        __vscodroid_ub_fg qemu-x86_64-static -L /opt/amd64 "/tmp/vsc-run/$id/${abs##*/}" "$@"
       return $? ;;
     *) echo "usage: ubuntu x86 setup | ubuntu x86 run PROGRAM [ARGS]" >&2; return 2 ;;
   esac
@@ -494,7 +537,8 @@ __vscodroid_ub_git_bg() {
   __vscodroid_ub_ready || return 0
   [ -f "$(__vscodroid_ub_root)/var/lib/vscodroid/provisioned/git" ] && return 0
   __vscodroid_ub_git_started=1
-  ( trap '' HUP; __vscodroid_ub_git_bootstrap ) >/dev/null 2>&1 &
+  # Started inside a second subshell so an interactive shell prints no "[1] 1234" job line.
+  ( ( trap '' HUP; __vscodroid_ub_git_bootstrap ) >/dev/null 2>&1 & )
   echo "vscodroid: Git is being set up inside Ubuntu in the background (log: ~/.vscodroid/git-setup.log)" >&2
   return 0
 }
@@ -598,7 +642,7 @@ ubuntu() {
            __vscodroid_ub_run_file "$@"; return $?
          fi ;;
   esac
-  __vscodroid_ub_exec "$@"
+  __vscodroid_ub_fg "$@"
 }
 
 native() { VSCODROID_NO_UBUNTU=1 "$@"; }

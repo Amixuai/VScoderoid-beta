@@ -620,3 +620,5 @@ reaches Logcat alone, and a report quotes the last 20 lines.
 | SCM | Git from Termux, as `libgit.so` and `libgit-remote-curl.so` plus `usr/lib/git-core` | Whatever the Termux index names at build time |
 | Python | Python 3 from Termux, fetched by `scripts/download-python.sh` | Whatever the Termux index names at build time; read it from `assets/usr/lib/libpython*.so` |
 | C++ stdlib | `libc++_shared.so` from Termux's `libc++` package, in `assets/usr/lib` | Whatever `scripts/download-termux-tools.sh` resolves |
+
+- Foreground commands from the terminal start under a guest shell with job control (`ubuntu-env.sh`), so Ctrl+C reaches the command's own process group, not proot. Built programs are defined under their typed, absolute and `./` paths; Code Runner is defaulted to the terminal (`code-runner.runInTerminal`) in the machine settings.
