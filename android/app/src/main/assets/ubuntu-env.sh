@@ -602,11 +602,78 @@ __vscodroid_token_in_args() {
   return 1
 }
 
+# ---- ubuntu doctor: what is wrong, and why -----------------------------------------
+# Read-only. Prints facts a failing command cannot: whether proot starts Ubuntu, whether
+# packages are consistent, whether the phone can reach Ubuntu's servers, how much room is
+# left, what THIS folder can and cannot do (links, permission bits, pipes, running programs),
+# and which tools exist inside Ubuntu. Changes nothing.
+__vscodroid_ub_doctor() {
+  local root d st audit mb line op
+  root=$(__vscodroid_ub_root); d=$(pwd -P 2>/dev/null || pwd)
+  echo "VSCodroid environment check (read-only)"
+  printf '%-14s %s\n' "Android" "$(getprop ro.build.version.release 2>/dev/null) (API $(getprop ro.build.version.sdk 2>/dev/null)), $(uname -m)"
+  if [ -x "${VSCODROID_PROOT-}" ] && [ -x "${PROOT_LOADER-}" ]; then
+    printf '%-14s %s\n' "proot" "found"
+  else
+    printf '%-14s %s\n' "proot" "MISSING: this build has no proot (VSCODROID_PROOT='${VSCODROID_PROOT-}')"
+  fi
+  if [ -e "$root/bin/sh" ] || [ -L "$root/bin/sh" ]; then
+    printf '%-14s %s\n' "Ubuntu" "installed ($(grep '^PRETTY_NAME=' "$root/etc/os-release" 2>/dev/null | cut -d= -f2 | tr -d '"'))"
+    __vscodroid_ub_exec /bin/true >/dev/null 2>&1; st=$?
+    if [ $st -eq 0 ]; then printf '%-14s %s\n' "starts" "yes"
+    else printf '%-14s %s\n' "starts" "NO (exit $st). Try: ubuntu repair. If the message mentions seccomp or SIGSYS: bash ~/.vscodroid/proot-test.sh"; fi
+    audit=$(__vscodroid_ub_exec dpkg --audit 2>&1); st=$?
+    if [ $st -eq 0 ] && [ -z "$audit" ]; then printf '%-14s %s\n' "packages" "consistent"
+    else printf '%-14s %s\n' "packages" "DAMAGED: $(printf '%s' "$audit" | head -n 1). Fix: ubuntu repair"; fi
+  else
+    printf '%-14s %s\n' "Ubuntu" "NOT installed. Run: ubuntu setup"
+  fi
+  if command -v timeout >/dev/null 2>&1; then
+    if timeout 6 bash -c 'exec 3<>/dev/tcp/ports.ubuntu.com/80' 2>/dev/null; then printf '%-14s %s\n' "network" "Ubuntu's package server is reachable"
+    else printf '%-14s %s\n' "network" "cannot reach ports.ubuntu.com (offline, or the network blocks it); apt install will fail"; fi
+  fi
+  mb=$(df -Pk "$HOME" 2>/dev/null | tail -n 1 | tr -s ' ' | cut -d' ' -f4)
+  [ -n "$mb" ] && printf '%-14s %s\n' "free space" "$((mb / 1024)) MB in the app's private storage (apt install default-jdk needs several hundred MB)"
+  if __vscodroid_shared_name "$d"; then
+    printf '%-14s %s\n' "this folder" "$d (Android shared storage)"
+    for op in symlink hardlink chmod fifo; do
+      case $op in symlink) line="symbolic links";; hardlink) line="hard links";; chmod) line="permission bits / owners";; fifo) line="pipes and device files";; esac
+      if __vscodroid_op_works "$op" "$d" 2>/dev/null; then printf '  %-26s %s\n' "$line" "supported"; else printf '  %-26s %s\n' "$line" "NOT supported here"; fi
+    done
+    printf '  %-26s %s\n' "running programs stored here" "NOT supported (use 'ubuntu ./prog' or 'bash script.sh')"
+  else
+    printf '%-14s %s\n' "this folder" "$d (not shared storage: links, permissions and programs work as on Linux)"
+  fi
+  if [ -e "$root/bin/sh" ] || [ -L "$root/bin/sh" ]; then
+    echo "Tools inside Ubuntu:"
+    __vscodroid_ub_exec /bin/sh -c 'for t in java javac gcc g++ clangd git; do printf "%s|%s\n" "$t" "$(command -v $t)"; done' 2>/dev/null |
+    while IFS='|' read -r t pth; do
+      if [ -n "$pth" ]; then printf '  %-8s %s\n' "$t" "$pth"
+      else
+        case "$t" in
+          java|javac) line="apt install default-jdk" ;;
+          gcc|g++)    line="apt install build-essential" ;;
+          clangd)     line="apt install clangd" ;;
+          git)        line="apt install git" ;;
+        esac
+        printf '  %-8s %s\n' "$t" "not installed (${line})"
+      fi
+    done
+  fi
+  if [ -n "${JAVA_HOME-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+    printf '%-14s %s\n' "phone JDK" "$JAVA_HOME"
+  else
+    printf '%-14s %s\n' "phone JDK" "none. The VS Code Java extension runs on the phone itself and needs a JDK that runs there; Ubuntu's JDK is for the terminal only"
+  fi
+  return 0
+}
+
 ubuntu() {
   case "${1-}" in
     setup) __vscodroid_ub_setup && __vscodroid_ub_git_bg; return $? ;;
     reset|repair)
       __vscodroid_ub_reset "$@"; return $? ;;
+    doctor) __vscodroid_ub_doctor; return $? ;;
     git-login)  shift; __vscodroid_ub_git_login "$@"; return $? ;;
     git-logout) shift; __vscodroid_ub_git_logout "$@"; return $? ;;
     git-check)  __vscodroid_ub_git_check; return $? ;;
@@ -624,6 +691,7 @@ ubuntu() {
       echo "ubuntu setup      install the Ubuntu system (once)"
       echo "ubuntu repair     check Ubuntu and reinstall it only if it is damaged"
       echo "ubuntu reset      wipe and reinstall Ubuntu (projects are not touched)"
+      echo "ubuntu doctor     read-only check: proot, packages, network, space, what this folder supports"
       echo "ubuntu git-login  save a GitHub token for Ubuntu's git (typed hidden)"
       echo "ubuntu git-logout / git-check"
       echo "ubuntu gui start  graphical desktop for Tkinter/Pygame (experimental)"

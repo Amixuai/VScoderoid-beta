@@ -225,6 +225,12 @@ jobs:
       - name: Check no document offers a withdrawn toolchain
         run: python3 scripts/check-toolchain-claims.py
 
+      # Reads the Kotlin sources and the shell assets only. The project rejected an
+      # automatic Projects / Backups / Exports hierarchy; users organise their own
+      # folders. This fails if code ever names one of those folders.
+      - name: Check the app creates no forced folder hierarchy
+        run: python3 scripts/check-no-forced-folders.py
+
       # Reads two Markdown files, the checklist and the release plan that cites
       # its rows, and no assets. The summary it checks is derived data kept by
       # hand, and it is the only record of whether a manual test pass covered

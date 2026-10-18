@@ -343,3 +343,11 @@ The decisions these risks settled, and what each one buys:
 | Job control under proot is refused on some phones | Low | Medium | `VSCODROID_UB_NO_JOB=1` restores the older behaviour; device test C1/C3 |
 | `type: process` tasks cannot find a compiler | Certain | Medium | Documented; use shell tasks (SELinux blocks a program file in app storage) |
 | A program with spaces in its path gets no `./name` | Medium | Low | `ubuntu ./prog` works |
+
+## Added 2026-10-18 (storage errors, toolchains)
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| The storage-limit line is shown for another cause | Low | Medium | It needs matching error text, shared storage, a writable folder and a failed trial of the operation; otherwise nothing is added |
+| Java or C++ extensions are assumed to work with Ubuntu's tools | High | Medium | EXTENSION_COMPATIBILITY.md says which need phone-side tools; `ubuntu doctor` shows the phone JDK |
+| `apt install default-jdk` fails (space, network, post-install step) | Medium | Medium | `ubuntu doctor` names the cause; DEVICE_TESTS_STABILITY.md J1-J2 |

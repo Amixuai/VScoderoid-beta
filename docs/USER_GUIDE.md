@@ -1439,3 +1439,12 @@ use the integrated terminal. NPM Scripts runs `npm` tasks as usual.
 Tap **Ctrl** on the extra key row, then **c**, to stop the running program. It works for `npm start`, Python servers and
 programs run in Ubuntu: the program gets the interrupt itself, as on a PC, and the terminal stays usable. At the
 `ubuntu` prompt it only cancels the line. In the editor the same keys copy text.
+
+### When a command fails in your projects folder
+
+Android's shared storage cannot hold symbolic or hard links, change permission bits, hold pipes, or run programs stored
+in it. If a command fails for one of those reasons you see its normal error, then one line saying so. `ubuntu doctor`
+lists what your current folder supports and what is wrong with Ubuntu, if anything. Install what you need with `apt`
+(for example `apt install default-jdk`); nothing is installed in advance. The app creates only your projects folder; it
+never creates `Projects`, `Backups` or `Exports` inside it. Extension support is listed in
+[EXTENSION_COMPATIBILITY](./EXTENSION_COMPATIBILITY.md).

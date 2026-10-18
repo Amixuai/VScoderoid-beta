@@ -1,5 +1,8 @@
 ## Unreleased
 
+- When `cp`, `mv`, `tar`, `ln`, `chmod`, `chown`, `chgrp`, `mkfifo` or `mknod` fails in shared storage because the storage cannot do it, one extra line names the limit (the tool's own error and exit code are unchanged). `VSCODROID_NO_FS_NOTES=1` turns it off.
+- `ubuntu doctor`: read-only check of proot, Ubuntu, packages, network, space, what the current folder supports, and tools inside Ubuntu.
+- `scripts/check-no-forced-folders.py` (guards against `Projects`/`Backups`/`Exports`). New docs: EXTENSION_COMPATIBILITY, DEVICE_TESTS_STABILITY.
 - Ctrl+C: a foreground command run in Ubuntu now gets its own process group (guest job control), so the interrupt reaches the command, not proot; `ubuntu` at its prompt no longer risks the session. The browser-preview watcher stops when its command ends or is interrupted. A job line no longer prints when the Git setup starts in the background.
 - Built programs can be started by their absolute path (what Code Runner uses) as well as `./name`; `rustc` output is covered. `code-runner.runInTerminal` is on by default.
 - `ubuntu repair` / `ubuntu reset` (with a "Proceed? [Y/n]" question) and the Command Palette entry "VSCodroid: Reinstall Linux Environment" (saf-bridge 1.12.0). Only the Ubuntu system in private storage is replaced.

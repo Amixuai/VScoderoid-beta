@@ -261,7 +261,7 @@ unset __n
 # COPY instead, and one line says so. A copy is not a link: later changes to the
 # original do not show up in it. If the target does not exist yet (a link to
 # something created later) there is nothing to copy and the real error is shown.
-ln() {
+__vscodroid_ln_impl() {
   if [ -n "${VSCODROID_NO_WRAP-}" ]; then command ln "$@"; return $?; fi
   local __a __end=0 __force=0 __notd=0 __odd=0
   local -a __pos=()
@@ -430,3 +430,131 @@ __vscodroid_py_preview() {
 }
 python3() { __vscodroid_py_preview python3 "$@"; }
 python() { __vscodroid_py_preview python "$@"; }
+
+# ---- say what shared storage cannot do, accurately ------------------------------------
+# Android's shared storage cannot hold symbolic or hard links, change permission bits or
+# owners, or hold special files (pipes, device nodes), and nothing in it can be executed.
+# When cp, mv, tar, ln, chmod, chown, chgrp, mkfifo or mknod fails there, the tool's own
+# error is shown exactly as always, and ONE more line names the real cause. That line is
+# added only when all of these hold: the folder is in shared storage and is writable, the
+# error text is one of the kind such a limit produces, and the folder really cannot do
+# that operation (checked by trying it). A missing file, a full disk, a genuine
+# permission problem and everything else are left exactly as the tool printed them.
+#
+#   VSCODROID_NO_FS_NOTES=1   turns the extra line off
+
+declare -A __vscodroid_fs_ok 2>/dev/null
+
+# Is this folder under shared storage (by name)? No filesystem call.
+__vscodroid_shared_name() {
+  local pre
+  for pre in ${VSCODROID_SHARED_PREFIXES:-/storage /sdcard /mnt/sdcard /mnt/user /mnt/media_rw}; do
+    case "$1" in "$pre"|"$pre"/*) return 0 ;; esac
+  done
+  return 1
+}
+
+# Does <operation> work in <folder>? Asked by trying it. Test hook: VSCODROID_FS_PROBE=ok|fail.
+__vscodroid_op_works() {
+  local op=$1 d=$2 key t1 t2 r=1
+  case "${VSCODROID_FS_PROBE-}" in ok) return 0 ;; fail) return 1 ;; esac
+  key="$op:$d"
+  if [ -n "${__vscodroid_fs_ok[$key]+x}" ]; then [ "${__vscodroid_fs_ok[$key]}" = 1 ]; return $?; fi
+  t1="$d/.vscodroid-op.$$"; t2="$d/.vscodroid-op2.$$"
+  case "$op" in
+    symlink)  command ln -s . "$t1" 2>/dev/null && r=0 ;;
+    hardlink) : > "$t1" 2>/dev/null && command ln "$t1" "$t2" 2>/dev/null && r=0 ;;
+    chmod)    : > "$t1" 2>/dev/null && command chmod 741 "$t1" 2>/dev/null && [ "$(command stat -c %a "$t1" 2>/dev/null)" = 741 ] && r=0 ;;
+    fifo)     command mkfifo "$t1" 2>/dev/null && r=0 ;;
+  esac
+  rm -f "$t1" "$t2" 2>/dev/null
+  __vscodroid_fs_ok[$key]=$((1 - r))
+  return $r
+}
+
+# __vscodroid_fs_explain <error text> <folder written to>
+__vscodroid_fs_explain() {
+  local text=$1 d=$2 said="" line op what hint
+  __vscodroid_shared_name "$d" && [ -w "$d" ] || return 0
+  while IFS= read -r line; do
+    printf '%s' "$line" | grep -Eqi 'Operation not permitted|not supported|Function not implemented|Permission denied|Invalid argument' || continue
+    case "$line" in
+      *"symbolic link"*|*symlink*|*Symlink*) op=symlink ;;
+      *"hard link"*|*"Cannot hard link"*) op=hardlink ;;
+      *"preserving permissions"*|*"Cannot change mode"*|*"changing permissions"*|*"Cannot change ownership"*|*"changing ownership"*|*"Cannot chmod"*|*"Cannot chown"*) op=chmod ;;
+      *mkfifo*|*mknod*|*"create node"*|*"special file"*) op=fifo ;;
+      *) continue ;;
+    esac
+    case " $said " in *" $op "*) continue ;; esac
+    __vscodroid_op_works "$op" "$d" && continue
+    said="$said $op"
+    case "$op" in
+      symlink)  what="symbolic links"; hint="Keep what needs them in a folder outside shared storage, such as ~ in Ubuntu." ;;
+      hardlink) what="hard links"; hint="A copy can stand in for one." ;;
+      chmod)    what="changing permission bits or owners"; hint="Files there cannot be made executable; run a script with 'bash script.sh' or a program with 'ubuntu ./prog'." ;;
+      fifo)     what="pipes and device files"; hint="Create them in a folder outside shared storage." ;;
+    esac
+    echo "vscodroid: Android public storage does not support $what ($d). The error above comes from that limit, not from the command. $hint" >&2
+  done <<EOF
+$text
+EOF
+  return 0
+}
+
+# Where is a command writing? The folder named by -C/--directory, else (for tar) the
+# current folder, else the folder of its last path argument.
+__vscodroid_fs_where() {
+  local kind=$1 a last="" dir="" skip=0 p
+  shift
+  for a in "$@"; do
+    if [ $skip -eq 1 ]; then dir=$a; skip=0; continue; fi
+    case "$a" in
+      -C|--directory) skip=1 ;;
+      --directory=*) dir=${a#--directory=} ;;
+      -*) ;;
+      *) last=$a ;;
+    esac
+  done
+  if [ -n "$dir" ]; then (cd "$dir" 2>/dev/null && pwd -P) && return; fi
+  if [ "$kind" != tar ] && [ -n "$last" ]; then
+    if [ -d "$last" ]; then (cd "$last" 2>/dev/null && pwd -P) && return; fi
+    p=${last%/*}; [ "$p" = "$last" ] && p=.
+    (cd "$p" 2>/dev/null && pwd -P) && return
+  fi
+  pwd -P
+}
+
+# Cheap test with no process started: does the current folder or any argument sit in shared storage?
+__vscodroid_fs_touches_shared() {
+  local a
+  __vscodroid_shared_name "$PWD" && return 0
+  for a in "$@"; do case "$a" in /*) __vscodroid_shared_name "$a" && return 0 ;; esac; done
+  return 1
+}
+
+# __vscodroid_fs_run <function that runs the tool> <kind> args...
+__vscodroid_fs_run() {
+  local fn=$1 kind=$2 d tmp st
+  shift 2
+  if [ -n "${VSCODROID_NO_FS_NOTES-}" ] || ! __vscodroid_fs_touches_shared "$@"; then "$fn" "$@"; return $?; fi
+  d=$(__vscodroid_fs_where "$kind" "$@")
+  tmp=$(mktemp "${TMPDIR:-/tmp}/vscodroid-fs.XXXXXX" 2>/dev/null) || { "$fn" "$@"; return $?; }
+  # The tool's own error text still reaches the terminal as it is written.
+  "$fn" "$@" 2> >(tee "$tmp" >&2)
+  st=$?
+  wait $! 2>/dev/null
+  [ $st -ne 0 ] && __vscodroid_fs_explain "$(cat "$tmp" 2>/dev/null)" "$d"
+  rm -f "$tmp"
+  return $st
+}
+
+for __n in cp mv tar chmod chown chgrp mkfifo mknod; do
+  if declare -F "$__n" >/dev/null 2>&1; then
+    eval "$(declare -f "$__n" | sed "1s/^$__n *()/__vscodroid_fs_orig_$__n ()/")"
+  else
+    eval "__vscodroid_fs_orig_$__n() { command $__n \"\$@\"; }"
+  fi
+  eval "$__n() { __vscodroid_fs_run __vscodroid_fs_orig_$__n $__n \"\$@\"; }"
+done
+unset __n
+ln() { __vscodroid_fs_run __vscodroid_ln_impl ln "$@"; }

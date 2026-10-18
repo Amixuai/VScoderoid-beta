@@ -18,6 +18,11 @@ Updated 2026-10-15. "Tested" says where. Nothing marked "pending" has been run o
 | Ctrl+C reaches the running command (Ubuntu and phone side); shell stays usable; watcher stops | Built | Real pty in a sandbox with stand-ins; extra-key-row Ctrl unchanged; phone run pending (C1-C7) |
 | `type: shell` tasks, Code Runner (terminal mode), NPM Scripts through the routing | Built | Sandbox: compile, run by absolute path, error and exit code; real extensions pending (B1-B7) |
 | `type: process` tasks that name a compiler directly | Not supported | Android blocks a program file in app storage; use shell tasks |
+| Accurate storage-limit line for failed cp/mv/tar/ln/chmod/chown/mkfifo/mknod; `ubuntu doctor` | Built | Sandbox with stand-ins; phone run pending (S1-S7, X1) |
+| `apt install default-jdk` and other packages through Ubuntu's own `apt` | Built (routing existed) | Not run; phone run pending (J1-J3) |
+| Java extensions | Depend on a phone-side JDK | Not verified (J4-J5) |
+| C/C++ IntelliSense (Microsoft C/C++, clangd) | Not supported | See EXTENSION_COMPATIBILITY.md |
+| Automatic `Projects`/`Backups`/`Exports` folders | Rejected, not implemented | `scripts/check-no-forced-folders.py` passes |
 | Hiding project files from phone-wide search | **Not solved** | A dot-folder was tried and removed; `.nomedia` covers the media scanner only |
 | Intel (x86_64) programs: `ubuntu x86 setup`, `ubuntu x86 run ./prog` (qemu-user inside Ubuntu, amd64 libraries unpacked beside it) | Built, experimental | Setup and run commands checked in the sandbox with stand-ins; real emulation pending a phone run. Slow by nature; prebuilt binaries only |
 | USB / Arduino flashing | Not built | Needs an Android USB service and a serial-over-TCP bridge |
@@ -36,6 +41,7 @@ Updated 2026-10-15. "Tested" says where. Nothing marked "pending" has been run o
 | `08-RISK_MATRIX.md`, `11-GLOSSARY.md` | New risks and terms |
 | `PLAY_STORE_ALL_FILES_ACCESS.md` (new) | Declaration answers and fallback |
 | `FEATURE_STATUS.md` (new) | This page |
+| `EXTENSION_COMPATIBILITY.md`, `DEVICE_TESTS_STABILITY.md` (new) | Which extensions work and why; phone tests for storage errors, toolchains, extensions |
 | `DEVICE_TESTS_BUILD_CTRLC.md` (new) | Phone tests for build tasks, extensions and Ctrl+C |
 | `ANDROID_LIMITATION_LOG.md`, `DEVICE_TESTS_RECOVERY_GIT.md` (new) | Investigation record and phone tests for Ubuntu recovery and Git |
 | `README.md`, `USER_GUIDE.md`, `UBUNTU_ROUTING.md`, `03-ARCHITECTURE.md`, `06-SECURITY.md`, `PRIVACY_POLICY.md`, `08-RISK_MATRIX.md`, `11-GLOSSARY.md`, `12-IMPLEMENTATION_PLAN.md` | Lines added for recovery, Git and token handling |

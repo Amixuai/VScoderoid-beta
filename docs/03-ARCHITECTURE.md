@@ -622,3 +622,5 @@ reaches Logcat alone, and a report quotes the last 20 lines.
 | C++ stdlib | `libc++_shared.so` from Termux's `libc++` package, in `assets/usr/lib` | Whatever `scripts/download-termux-tools.sh` resolves |
 
 - Foreground commands from the terminal start under a guest shell with job control (`ubuntu-env.sh`), so Ctrl+C reaches the command's own process group, not proot. Built programs are defined under their typed, absolute and `./` paths; Code Runner is defaulted to the terminal (`code-runner.runInTerminal`) in the machine settings.
+
+- `assets/command-wrapper.sh` adds one line naming the storage limit when cp, mv, tar, ln, chmod and similar fail in shared storage for that reason (checked by a trial of the operation, never assumed). `ubuntu doctor` in `ubuntu-env.sh` reports the environment read-only. `scripts/check-no-forced-folders.py` guards against creating `Projects`, `Backups` or `Exports`.

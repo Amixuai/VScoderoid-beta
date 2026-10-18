@@ -74,3 +74,35 @@ shell is not guarded; `ubuntu git-check` warns about a token already in `.git/co
 | Process lifecycle | `--kill-on-exit` stays, so nothing is left in Ubuntu when proot ends. The browser-opening watcher now stops when its command ends or is interrupted |
 | Result | Real-pty sandbox tests: a program's own handler runs and proot is not signalled (without the fix, proot kills it); at the Ubuntu prompt Ctrl+C does not end the session; a dev server stops, its port closes, no watcher remains, the prompt returns |
 | Remaining limit | Whether the real proot on a phone behaves as described, and whether tcsetpgrp works under it, is for the device test (DEVICE_TESTS_BUILD_CTRLC.md). If a phone refuses job control, the old behaviour is one environment variable away |
+
+## 7. Errors from unsupported operations in shared storage
+
+2026-10-18. Status: written; tested only with stand-ins for the phone's tools in a sandbox. Not run on a phone.
+
+| Step | Finding |
+|------|---------|
+| Limits involved | Shared storage cannot hold symbolic links or hard links, cannot change permission bits or owners, cannot hold pipes or device files, and nothing in it can be executed. These are the limits already recorded in this repository (the `ln -s` failure noted in `Environment.kt`, `SYMLINKS_ON_PUBLIC_STORAGE.md`) and the ones the owner met with `npm install` |
+| Documentation | Android's storage documentation and the tools' manuals were **not re-read for this change**; the limits above come from the repository's own earlier findings. A reviewer should confirm them against the current Android documentation before release |
+| What was wrong | When `cp -a`, `mv`, `tar`, `ln`, `chmod` and similar failed there, the terminal showed only the tool's terse line, with nothing to say the cause was the storage |
+| Change | The tool's own error is kept exactly. One extra line names the cause, and only when (a) the folder is in shared storage and writable, (b) the error text is of the kind such a limit produces, and (c) a trial shows the folder really cannot do that operation. A missing file, a full disk or a real permission problem gets no extra line. A later Android that allows the operation gets none either. `VSCODROID_NO_FS_NOTES=1` turns it off |
+| Exit codes | Unchanged |
+| Result | Sandbox, with stand-ins that fail like the storage: links, permission bits, pipes and tar extraction get the right line; "No such file" gets none; a folder that can do the operation gets none; the original text and exit code are intact |
+| Not covered | Errors printed by programs inside Ubuntu, by npm, git or other tools that call the system directly, and `Permission denied` from running a stored program (`./script.sh`): no line is added there, because nothing in the shell sees those errors. `ubuntu doctor` shows what a folder supports |
+| Crashes | No crash was reproduced in the sandbox, and no phone log was available, so no crash fix is claimed. The shell layers never abort the shell: they pass the tool's status through |
+
+## 8. Language toolchains and extensions
+
+2026-10-18. Status: **nothing here has been run on a phone.** See EXTENSION_COMPATIBILITY.md for the table.
+
+| Question | Finding |
+|----------|---------|
+| `apt install default-jdk` | Goes through the routed `apt` in Ubuntu, under the shared package lock. Not run. Things that can fail, all diagnosable with `ubuntu doctor`: no network, too little space (several hundred MB), a damaged package database (`ubuntu repair`), and the JDK's post-install step, which starts Java once; if proot blocks it the error names the step |
+| Which tools the editor can use | Extensions run on the phone side. They can start programs the phone can run, not Ubuntu's programs (they are built for a different C library and are not reachable as files the phone may start). So Ubuntu's JDK serves the terminal, and the Java extension needs a JDK that runs on the phone |
+| Java extensions | The app already exports `JAVA_HOME` for a phone-side JDK when one is installed from the Toolchains list. No new interface was added. Not verified with a real project |
+| C/C++ IntelliSense | The Microsoft C/C++ extension is published through Microsoft's Marketplace, whose terms limit it to Microsoft's own products, and it ships programs for the desktop C library. Not offered. A clangd-based extension from Open VSX would need a clangd the phone can start; running Ubuntu's through proot was considered and not shipped (the extension checks the program's version by starting it directly, so a wrapper is fragile). Compiling and running through tasks works as described in section 5 |
+| Config defects found | None found by reading the code; no settings changed in this round |
+| Remaining | Real-project tests (see DEVICE_TESTS_STABILITY.md). Anything an extension needs that the phone cannot start stays unsupported and is listed in EXTENSION_COMPATIBILITY.md |
+
+## 9. Automatic base folders: rejected
+
+2026-10-18. Not implemented, by decision. Checked: no code creates `Projects`, `Backups` or `Exports`; the app creates only the workspace root, an empty `.nomedia` in it, and (on a fresh private folder) a welcome `README.md`. `scripts/check-no-forced-folders.py` fails if code ever names those folders. It is not yet wired into a workflow; run it from the repository root.

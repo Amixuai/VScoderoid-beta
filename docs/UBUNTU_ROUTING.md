@@ -87,3 +87,12 @@ by its absolute path (Code Runner does this), or as `./name`; a bare name is nev
 
 `type: shell` tasks and Code Runner (set to run in the terminal) run commands through the routing. `type: process` tasks
 that name `gcc` directly cannot work (see ANDROID_LIMITATION_LOG section 5).
+
+## Errors from shared storage, and `ubuntu doctor`
+
+When `cp`, `mv`, `tar`, `ln`, `chmod`, `chown`, `chgrp`, `mkfifo` or `mknod` fails in shared storage because the storage
+cannot do that, the tool's own error is shown unchanged and one line names the limit. Nothing is added for other errors,
+and `VSCODROID_NO_FS_NOTES=1` turns it off. `ubuntu doctor` (read-only) shows whether proot starts Ubuntu, whether packages
+are consistent, whether Ubuntu's package server is reachable, free space, what the current folder supports (links,
+permission bits, pipes, running programs) and which tools exist inside Ubuntu (`java`, `javac`, `gcc`, `g++`, `clangd`,
+`git`) with the `apt` command that installs a missing one.

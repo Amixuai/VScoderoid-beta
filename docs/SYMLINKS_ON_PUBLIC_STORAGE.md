@@ -38,3 +38,8 @@ links instead of moving the workspace.
 An `LD_PRELOAD` library that stores a link as a tiny marker file and reads it
 back, as Cygwin does. It would cover any program that uses libc, including `tar`,
 but not Go, and not programs inside proot. It needs testing on a real device first.
+
+## Update 2026-10-18
+
+`tar` extracting links, `cp -a`/`mv` preserving permissions, `chmod`, `chown`, `mkfifo` and `mknod` now get one extra line
+naming the storage limit when that is the cause (see UBUNTU_ROUTING.md). They are explained, not made to work.
