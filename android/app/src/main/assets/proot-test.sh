@@ -104,11 +104,18 @@ def wanted(tf):
         yield member
 
 os.makedirs(root, exist_ok=True)
+# Markers: "installing" while unpacking (so an interrupted install can still be recognised
+# and reset), "ubuntu" once complete. `ubuntu reset` only ever removes a folder it can
+# recognise by these (or, for older installs, by a genuine Ubuntu os-release).
+installing = os.path.join(root, ".vscodroid-installing")
+open(installing, "w").write(distro + "\n")
 with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as t:
     try:
         t.extractall(root, members=wanted(t), filter="tar")
     except TypeError:
         t.extractall(root, members=wanted(t))
+os.remove(installing)
+open(os.path.join(root, ".vscodroid-ubuntu"), "w").write(distro + " " + name + "\n")
 print("  unpacked " + name)
 PY
 else

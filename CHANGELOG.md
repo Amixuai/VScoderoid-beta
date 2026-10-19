@@ -1,5 +1,8 @@
 ## Unreleased
 
+- `ubuntu reset` / `repair` act only on a folder positively recognised as the app's own Ubuntu (canonical path, no links, installer marker or genuine Ubuntu os-release); otherwise they stop and say why. Read-only folders are made writable with `find`, which does not follow links.
+- Git token guard shared by the phone's `git` and a `git` written into Ubuntu: skips global options (`-C`, `-c`), hides stored tokens in `remote -v`/`config` output, drops the typed line from shell history. `ubuntu git-logout` removes the file when empty; `ubuntu git-check` shows and repairs file modes and states the sign-in is not encrypted.
+- The Public Workspace is named `VSCodroid` (an existing `vscodroid` folder is kept). Documentation spelling corrected. New docs: STORAGE_MAP, DEVICE_TESTS_GROUP1_FIXES.
 - When `cp`, `mv`, `tar`, `ln`, `chmod`, `chown`, `chgrp`, `mkfifo` or `mknod` fails in shared storage because the storage cannot do it, one extra line names the limit (the tool's own error and exit code are unchanged). `VSCODROID_NO_FS_NOTES=1` turns it off.
 - `ubuntu doctor`: read-only check of proot, Ubuntu, packages, network, space, what the current folder supports, and tools inside Ubuntu.
 - `scripts/check-no-forced-folders.py` (guards against `Projects`/`Backups`/`Exports`). New docs: EXTENSION_COMPATIBILITY, DEVICE_TESTS_STABILITY.

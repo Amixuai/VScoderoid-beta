@@ -526,7 +526,7 @@ permission and no other app can browse either (Android 11 closed `Android/data`)
 Data wipes both; the shared-storage one is also reachable over MTP and by a few OEM file
 managers. Work that has to survive either belongs in a folder opened through the SAF picker.
 
-**Superseded 2026-10-15.** The default workspace is `/storage/emulated/0/vscodroid` again, now with
+**Superseded 2026-10-15.** The default workspace is `/storage/emulated/0/VSCodroid` again, now with
 `MANAGE_EXTERNAL_STORAGE` and the terminal layers below that deal with the missing links:
 
 - `util/PublicStorage.kt` names the root, answers whether All files access is held, resolves a picked
@@ -624,3 +624,5 @@ reaches Logcat alone, and a report quotes the last 20 lines.
 - Foreground commands from the terminal start under a guest shell with job control (`ubuntu-env.sh`), so Ctrl+C reaches the command's own process group, not proot. Built programs are defined under their typed, absolute and `./` paths; Code Runner is defaulted to the terminal (`code-runner.runInTerminal`) in the machine settings.
 
 - `assets/command-wrapper.sh` adds one line naming the storage limit when cp, mv, tar, ln, chmod and similar fail in shared storage for that reason (checked by a trial of the operation, never assumed). `ubuntu doctor` in `ubuntu-env.sh` reports the environment read-only. `scripts/check-no-forced-folders.py` guards against creating `Projects`, `Backups` or `Exports`.
+
+- Reset and repair recognise the app's own Ubuntu by canonical path, link and marker checks before acting (`__vscodroid_ub_is_ours`); the installer writes the markers. `assets/git-token-guard.sh` is the one guard used by the phone's `git` and by the `git` written into Ubuntu. `PublicStorage.rootDir()` names the workspace `VSCodroid` and keeps an existing `vscodroid` folder.

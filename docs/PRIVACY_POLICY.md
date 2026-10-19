@@ -1,7 +1,7 @@
 # VSCodroid Privacy Policy
 
 **Effective Date: February 13, 2026**
-**Last Updated: October 18, 2026**
+**Last Updated: October 22, 2026**
 
 ## Summary
 
@@ -29,7 +29,7 @@ traffic between the editor page and the local server. `FOREGROUND_SERVICE` and
 `FOREGROUND_SERVICE_SPECIAL_USE` keep that local server alive while you are
 working. `POST_NOTIFICATIONS` is for the notification showing the server's
 status. `MANAGE_EXTERNAL_STORAGE` ("All files access") lets the app keep your
-projects in an ordinary folder on your phone (`/storage/emulated/0/vscodroid`)
+projects in an ordinary folder on your phone (`/storage/emulated/0/VSCodroid`)
 and read and write it directly, so you can see the files in your file manager
 and the tools you run in the terminal can work on them. You switch it on
 yourself, on Android's own settings screen, and the app works without it, with
@@ -113,7 +113,7 @@ request from your device. VSCodroid does not collect any data during this.
 
 The first time the Ubuntu environment is ready, the app also installs Git inside it from those same package servers.
 If you use `ubuntu git-login`, the username and token you type are kept in a file in the app's private storage (not in
-any project, not in a backup) and are used only when Git inside Ubuntu contacts the server you named. They are not sent
+any project, not in a backup). The file is not encrypted; it is protected by the app's private storage and by file permissions only and are used only when Git inside Ubuntu contacts the server you named. They are not sent
 to VSCodroid or anyone else, and `ubuntu git-logout` removes them.
 
 ### SSH Connections (User-Initiated)

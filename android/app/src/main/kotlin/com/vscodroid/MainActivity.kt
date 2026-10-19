@@ -417,7 +417,7 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * The system "All files access" screen. The workspace lives in public storage
-     * (`/storage/emulated/0/vscodroid`), which plain file access can only reach
+     * (`/storage/emulated/0/VSCodroid`), which plain file access can only reach
      * once the user turns this on. Registered as a field for the same reason as
      * every launcher here.
      */
@@ -3551,7 +3551,7 @@ class MainActivity : AppCompatActivity() {
      * Keeps the long device path out of the interface.
      *
      * The editor reads and writes real paths such as
-     * `/storage/emulated/0/vscodroid/MyProject`, which is noise on a phone. This
+     * `/storage/emulated/0/VSCodroid/MyProject`, which is noise on a phone. This
      * rewrites the TEXT shown in a few path-showing surfaces (Open Recent, the
      * Welcome page's recent list, the title bar and the folder pickers' lists) to
      * the short form `~/MyProject` or `MyProject`. It touches only those

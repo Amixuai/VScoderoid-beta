@@ -11,7 +11,7 @@ None has been run on a phone yet. Record the result next to each line.
 | S5 | `tar xf` an archive with links into the workspace | Normal tar errors plus the link line |
 | S6 | `ubuntu doctor` in the workspace and in `~` | Workspace: unsupported operations listed; `~`: all as on Linux |
 | S7 | `VSCODROID_NO_FS_NOTES=1 chmod +x f` | Only the normal error |
-| S8 | Delete nothing, check `ls /storage/emulated/0/vscodroid` after a fresh install | No `Projects`, `Backups` or `Exports` |
+| S8 | Delete nothing, check `ls /storage/emulated/0/VSCodroid` after a fresh install | No `Projects`, `Backups` or `Exports` |
 | J1 | `ubuntu apt update` then `apt install default-jdk` | Installs; `ubuntu java -version` and `javac -version` print versions |
 | J2 | Repeat J1 with airplane mode on | A clear network failure from apt; `ubuntu doctor` says the server is unreachable |
 | J3 | Compile and run a `Main.java` with `javac` and `java` in the terminal | Works |

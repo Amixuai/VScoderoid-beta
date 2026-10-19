@@ -96,3 +96,10 @@ and `VSCODROID_NO_FS_NOTES=1` turns it off. `ubuntu doctor` (read-only) shows wh
 are consistent, whether Ubuntu's package server is reachable, free space, what the current folder supports (links,
 permission bits, pipes, running programs) and which tools exist inside Ubuntu (`java`, `javac`, `gcc`, `g++`, `clangd`,
 `git`) with the `apt` command that installs a missing one.
+
+## Reset path validation and the Git guard (2026-10-19)
+
+`ubuntu reset` and `repair` act only on a folder they recognise as the app's own Ubuntu (see STORAGE_MAP.md) and otherwise
+stop with the reason. The `git` inside Ubuntu is `/usr/local/bin/git`, written from `git-token-guard.sh`, the same file the
+phone's `git` uses: it refuses remote addresses that carry a password or token, hides stored ones in output, and the typed
+line is dropped from history. `ubuntu git-check` shows the sign-in file's modes and repairs them.

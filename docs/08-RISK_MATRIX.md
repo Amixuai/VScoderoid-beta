@@ -351,3 +351,12 @@ The decisions these risks settled, and what each one buys:
 | The storage-limit line is shown for another cause | Low | Medium | It needs matching error text, shared storage, a writable folder and a failed trial of the operation; otherwise nothing is added |
 | Java or C++ extensions are assumed to work with Ubuntu's tools | High | Medium | EXTENSION_COMPATIBILITY.md says which need phone-side tools; `ubuntu doctor` shows the phone JDK |
 | `apt install default-jdk` fails (space, network, post-install step) | Medium | Medium | `ubuntu doctor` names the cause; DEVICE_TESTS_STABILITY.md J1-J2 |
+
+## Added 2026-10-19 (Group 1 follow-up)
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|-----------|
+| Reset removes a folder that only looks like Ubuntu | Very low | Critical | Canonical-path, link, marker and shared-storage checks before any question; refusal states the reason |
+| A genuine but damaged Ubuntu is refused | Low | Low | The installer marker survives damage; an interrupted install is marked |
+| Token passed in a way the guard does not inspect | Medium | Medium | Listed in STORAGE_MAP.md; sign-in via `ubuntu git-login` and VS Code |
+| Lower-case `vscodroid` and `VSCodroid` both exist on a case-sensitive phone | Low | Low | The existing folder is kept; no second folder is made |

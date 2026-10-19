@@ -336,7 +336,7 @@ object Environment {
      */
     fun getProjectsDir(context: Context): String {
         // Public storage wins whenever the user has granted All files access:
-        // /storage/emulated/0/vscodroid, visible to every file manager. The
+        // /storage/emulated/0/VSCodroid, visible to every file manager. The
         // private-storage logic below is only the fallback for the time before
         // that grant, because nothing can be written to public storage without it.
         // See [PublicStorage] for what that location trades away (no symlinks,

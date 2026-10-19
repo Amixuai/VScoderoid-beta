@@ -11,7 +11,7 @@
 
 ## Hiding projects from search
 
-The workspace is `/storage/emulated/0/vscodroid` with an empty `.nomedia` in it. That keeps the media
+The workspace is `/storage/emulated/0/VSCodroid` with an empty `.nomedia` in it. That keeps the media
 scanner (Gallery, Recent) away. It does not stop every phone-wide search app from listing the files.
 A dot-folder (`.VSCodroid`) was tried to hide them and did not work, so it was removed.
 

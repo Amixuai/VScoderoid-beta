@@ -219,3 +219,6 @@ Commands that reinstall the Ubuntu system in private storage without touching pr
 
 **Process group / job control**
 A group of processes the terminal signals together (Ctrl+C goes to the foreground group). A shell with job control gives each command its own group.
+
+**Installer marker**
+A small file (`.vscodroid-ubuntu`, or `.vscodroid-installing` while unpacking) the installer leaves in the Ubuntu folder so a reset can recognise it.

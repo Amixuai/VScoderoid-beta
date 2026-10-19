@@ -9,7 +9,7 @@ import java.io.File
 import java.io.IOException
 
 /**
- * The user's workspace on public external storage (`/storage/emulated/0/vscodroid`).
+ * The user's workspace on public external storage (`/storage/emulated/0/VSCodroid`).
  *
  * Everything here uses plain [java.io.File]. Nothing is inserted into MediaStore,
  * because that is what pushes project files into the system "Recent" list.
@@ -31,7 +31,10 @@ object PublicStorage {
      * work, so it was removed. [NOMEDIA] keeps the media scanner (Gallery, Recent)
      * out of it.
      */
-    const val ROOT_NAME = "vscodroid"
+    const val ROOT_NAME = "VSCodroid"
+
+    /** The spelling earlier builds used. Shared storage is normally case-insensitive, so it is the same folder there. */
+    private const val LEGACY_ROOT_NAME = "vscodroid"
     const val NOMEDIA = ".nomedia"
 
     /** Top-level shared folders where a `.nomedia` would hide the user's own media. */
@@ -44,9 +47,18 @@ object PublicStorage {
     fun hasAccess(): Boolean =
         runCatching { android.os.Environment.isExternalStorageManager() }.getOrDefault(false)
 
-    /** `/storage/emulated/0/vscodroid`. */
-    fun rootDir(): File =
-        File(android.os.Environment.getExternalStorageDirectory(), ROOT_NAME)
+    /**
+     * `/storage/emulated/0/VSCodroid`. Where the storage tells the two spellings apart, an
+     * existing folder from an earlier build is kept as it is: no second folder is made
+     * beside it, and nothing is moved or renamed.
+     */
+    fun rootDir(): File {
+        val base = android.os.Environment.getExternalStorageDirectory()
+        val preferred = File(base, ROOT_NAME)
+        if (preferred.isDirectory) return preferred
+        val legacy = File(base, LEGACY_ROOT_NAME)
+        return if (legacy.isDirectory) legacy else preferred
+    }
 
     /** The system screen where the user turns All files access on for this app. */
     fun accessSettingsIntent(context: Context): Intent =

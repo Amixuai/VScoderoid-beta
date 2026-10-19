@@ -33,7 +33,7 @@ A practical guide to using VSCodroid -- the full VS Code IDE running natively on
 
 | Item | Path |
 |------|------|
-| Projects folder | `/storage/emulated/0/vscodroid` once you allow "All files access"; until then `~/projects/` in the app's private storage |
+| Projects folder | `/storage/emulated/0/VSCodroid` once you allow "All files access"; until then `~/projects/` in the app's private storage |
 | Settings and data | `~/.vscodroid/` (private) |
 | SSH keys | `~/.ssh/` (private) |
 | Ubuntu system (C/C++ compilers, Python, Rust) | private storage, `~/proot/ubuntu` |
@@ -1448,3 +1448,11 @@ lists what your current folder supports and what is wrong with Ubuntu, if anythi
 (for example `apt install default-jdk`); nothing is installed in advance. The app creates only your projects folder; it
 never creates `Projects`, `Backups` or `Exports` inside it. Extension support is listed in
 [EXTENSION_COMPATIBILITY](./EXTENSION_COMPATIBILITY.md).
+
+### Where your files live, and Git safety
+
+Your projects stay in `/storage/emulated/0/VSCodroid` so you can see them in a file manager; caches, the Ubuntu system and
+the Git sign-in are in private storage (full table: [STORAGE_MAP](./STORAGE_MAP.md)). `ubuntu reset` removes only the
+Ubuntu system and refuses if it cannot be sure which folder that is. The Git sign-in for Ubuntu is kept in private
+storage as a plain file; it is **not encrypted**. A command that puts a password or token inside a remote address is
+refused, in the phone's terminal and inside Ubuntu.

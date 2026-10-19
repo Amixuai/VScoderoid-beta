@@ -375,7 +375,7 @@
          translation may need it somewhere other than the middle: the quoting
          around it is part of the resource for the same reason. -->
     <string name="storage_access_title">Allow access to files</string>
-    <string name="storage_access_message">VSCodroid keeps your projects in a normal folder on your phone (vscodroid), so you can see them in your file manager and share them with other apps. Android needs your permission for this. On the next screen, turn on \"Allow access to manage all files\".</string>
+    <string name="storage_access_message">VSCodroid keeps your projects in a normal folder on your phone (VSCodroid), so you can see them in your file manager and share them with other apps. Android needs your permission for this. On the next screen, turn on \"Allow access to manage all files\".</string>
     <string name="storage_access_grant">Open settings</string>
     <string name="storage_access_later">Not now</string>
     <string name="saf_sync_title">Opening folder</string>

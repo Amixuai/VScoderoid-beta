@@ -106,3 +106,20 @@ shell is not guarded; `ubuntu git-check` warns about a token already in `.git/co
 ## 9. Automatic base folders: rejected
 
 2026-10-18. Not implemented, by decision. Checked: no code creates `Projects`, `Backups` or `Exports`; the app creates only the workspace root, an empty `.nomedia` in it, and (on a fresh private folder) a welcome `README.md`. `scripts/check-no-forced-folders.py` fails if code ever names those folders. It is not yet wired into a workflow; run it from the repository root.
+
+## 10. Group 1 follow-up (reset path validation, Git token protection, workspace path)
+
+2026-10-19. Status: written and checked in a sandbox; **no phone test yet.**
+
+| Item | Found | Fix | Checked |
+|------|-------|-----|---------|
+| Reset/repair path check | Trusted any path ending in `proot/ubuntu`; no marker, no link or `..` check; a linked `~/proot` would redirect an install or removal | The folder must be exactly the app home plus `proot/ubuntu` once links are resolved, not a link, not in shared storage, with the installer marker (or a genuine Ubuntu os-release for older installs). The installer now writes the markers. Otherwise nothing happens and the reason is shown, before any question | Sandbox: correct path, three marker kinds accepted; unrelated `/tmp/.../proot/ubuntu`, `..`, `//`, link, linked parent, no marker refused; workspace intact in all |
+| Read-only folders | `chmod -R` could follow links into a project | `find -type d` (does not follow links) | Sandbox |
+| Git guard | Only the phone's `git`; skipped when `-C` or `-c` came first; nothing inside Ubuntu; stored tokens printed by `remote -v` and `config`; the typed line stayed in history | One shared guard file used by the phone and by a `git` wrapper written into Ubuntu; global options skipped; output masked; the history line dropped | Real git, temporary repositories, 25 cases; the Ubuntu wrapper run directly (not inside proot) |
+| Logout | Left an empty credentials file | Removed when nothing is left | Sandbox |
+| Token file modes | Not verified | Created with umask 077; `ubuntu git-check` shows and repairs modes | Sandbox |
+| Workspace spelling | Code used `vscodroid`; the designated path is `VSCodroid` | `VSCodroid`; an existing `vscodroid` folder is kept, never duplicated or moved | Code only; Kotlin not compiled, not run |
+| Docs | 10 references and one manifest comment used the lower-case spelling; no single description of what lives where | Corrected; STORAGE_MAP.md added | Docs checks |
+
+Unchanged on purpose: the private-storage sign-in, its plain-file form (stated as not encrypted), Source Control and GitHub sign-in, login/logout/check behaviour, the existing reset question and its text.
+Remaining limits are listed in STORAGE_MAP.md under "Not covered".

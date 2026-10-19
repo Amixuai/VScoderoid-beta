@@ -4,7 +4,7 @@ Run on a phone; record the result next to each line. None has been run yet.
 
 | # | Test | Expected |
 |---|------|----------|
-| R1 | Put a file in `/storage/emulated/0/vscodroid/p/a.txt`, run `ubuntu reset`, answer `y` | Question text appears exactly; Ubuntu reinstalls; `a.txt` still there |
+| R1 | Put a file in `/storage/emulated/0/VSCodroid/p/a.txt`, run `ubuntu reset`, answer `y` | Question text appears exactly; Ubuntu reinstalls; `a.txt` still there |
 | R2 | `ubuntu reset`, answer `n` | "cancelled", nothing changed |
 | R3 | Command Palette: **VSCodroid: Reinstall Linux Environment** | A terminal opens and asks the same question |
 | R4 | Break Ubuntu on purpose (`ubuntu rm /bin/sh`), then run `ubuntu repair` | Detects damage, reinstalls |

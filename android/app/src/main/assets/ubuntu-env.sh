@@ -56,6 +56,7 @@ __vscodroid_ub_exec() {
   fi
   envv+=("PATH=$gpath")
   [ -f "$gitdir/gitconfig" ] && envv+=(GIT_CONFIG_GLOBAL=/root/.vscodroid-git/gitconfig)
+  [ -n "${VSCODROID_NO_TOKEN_GUARD-}" ] && envv+=(VSCODROID_NO_TOKEN_GUARD=1)
   # While the graphical desktop runs (ubuntu gui start), programs draw on it.
   if [ -f "$HOME/.vscodroid/gui.pid" ] && kill -0 "$(cat "$HOME/.vscodroid/gui.pid" 2>/dev/null)" 2>/dev/null; then
     envv+=(DISPLAY=:1)
@@ -427,24 +428,79 @@ __vscodroid_ub_healthy() {
   [ -z "$audit" ]
 }
 
+# The canonical form of a folder (links resolved), or nothing.
+__vscodroid_ub_canon() { ( cd "$1" 2>/dev/null && pwd -P ); }
+
+# Is <path> THE <leaf> system this app installed? Every test must pass, or nothing is
+# removed. On failure the reason is printed and the status is 1. A name that merely ends
+# in proot/ubuntu proves nothing: the folder must be exactly <app home>/proot/<leaf>
+# once links are resolved, must not itself be a link, must not be in shared storage, and
+# must carry the installer's marker (or, for an install made before markers existed,
+# look like a real Ubuntu).
+__vscodroid_ub_is_ours() {
+  local p=$1 leaf=$2 home canon_p
+  if [ -z "${HOME-}" ] || [ ! -d "$HOME" ]; then echo "HOME is not set to a folder"; return 1; fi
+  home=$(__vscodroid_ub_canon "$HOME")
+  case "$home" in ""|/storage/*|/sdcard/*|/mnt/*) echo "the app's home folder is not in private storage"; return 1 ;; esac
+  case "$p" in *..*|*//*|*/./*|*/.) echo "the path has '..', '.' or '//' in it"; return 1 ;; esac
+  [ -L "$p" ] && { echo "it is a symbolic link"; return 1; }
+  [ -L "$HOME/proot" ] && { echo "$HOME/proot is a symbolic link"; return 1; }
+  [ -d "$p" ] || { echo "it is not a folder"; return 1; }
+  canon_p=$(__vscodroid_ub_canon "$p")
+  [ "$canon_p" = "$home/proot/$leaf" ] || { echo "it resolves to $canon_p, not to $home/proot/$leaf"; return 1; }
+  if { [ -f "$p/.vscodroid-ubuntu" ] && [ ! -L "$p/.vscodroid-ubuntu" ]; } ||
+     { [ -f "$p/.vscodroid-installing" ] && [ ! -L "$p/.vscodroid-installing" ]; }; then
+    return 0
+  fi
+  if [ -f "$p/etc/os-release" ] && [ ! -L "$p/etc/os-release" ] && grep -q '^ID=ubuntu' "$p/etc/os-release" &&
+     { [ -e "$p/bin/sh" ] || [ -L "$p/bin/sh" ]; }; then
+    return 0
+  fi
+  echo "it has no installer marker and does not look like an Ubuntu system"
+  return 1
+}
+
+# Older installs have no marker. Once one is confirmed genuine, give it one, so that a
+# later damaged state can still be recognised and repaired.
+__vscodroid_ub_mark_if_genuine() {
+  local root; root=$(__vscodroid_ub_root)
+  [ -f "$root/.vscodroid-ubuntu" ] && return 0
+  __vscodroid_ub_is_ours "$root" ubuntu >/dev/null 2>&1 && : > "$root/.vscodroid-ubuntu" 2>/dev/null
+  return 0
+}
+
 __vscodroid_ub_reset() {
-  local mode=$1 a yes=0 root x86 ans tty
+  local mode=$1 a yes=0 root x86 ans tty why
   shift
   for a in "$@"; do case "$a" in -y|--yes) yes=1 ;; esac; done
   root=$(__vscodroid_ub_root)
-  # Only the Ubuntu folders in private storage may ever be removed.
-  case "$root" in
-    /storage/*|/sdcard/*|/mnt/*|""|/) echo "vscodroid: refusing to reset '$root': it is not in the app's private storage" >&2; return 1 ;;
-    */proot/ubuntu) ;;
-    *) echo "vscodroid: refusing to reset '$root': not the Ubuntu system folder" >&2; return 1 ;;
-  esac
-  x86="${root%/*}/ubuntu-amd64"
+  x86="$HOME/proot/ubuntu-amd64"
+  # A link in place of the proot folder would send an install or a removal somewhere else.
+  if [ -L "$HOME/proot" ]; then
+    echo "vscodroid: nothing was changed. $HOME/proot is a symbolic link; Ubuntu is only installed or removed inside the app's own folder." >&2
+    return 1
+  fi
+  # Only the Ubuntu folders this app installed in its private storage may ever be removed,
+  # and only when each is positively recognised. Anything doubtful stops here, before any
+  # question is asked or anything is deleted.
+  if [ -e "$root" ] || [ -L "$root" ]; then
+    why=$(__vscodroid_ub_is_ours "$root" ubuntu) || {
+      echo "vscodroid: nothing was removed. '$root' is not recognised as the Ubuntu system this app installed: $why." >&2
+      return 1
+    }
+  fi
+  if [ -e "$x86" ] || [ -L "$x86" ]; then
+    why=$(__vscodroid_ub_is_ours "$x86" ubuntu-amd64) || {
+      echo "vscodroid: nothing was removed. '$x86' is not recognised as the Intel Ubuntu folder this app installed: $why." >&2
+      return 1
+    }
+  fi
 
   if [ "$mode" = repair ] && __vscodroid_ub_healthy; then
     echo "vscodroid: Ubuntu looks healthy. To reinstall it anyway, run:  ubuntu reset"
     return 0
   fi
-  if [ ! -d "$root" ]; then
+  if [ ! -e "$root" ] && [ ! -L "$root" ]; then
     echo "vscodroid: Ubuntu is not installed; installing it."
     __vscodroid_ub_setup && __vscodroid_ub_git_bg
     return $?
@@ -467,9 +523,10 @@ __vscodroid_ub_reset() {
   echo "vscodroid: removing the Ubuntu system..."
   # Make read-only folders removable; rm does not follow links, so a link inside
   # Ubuntu that points at a project is removed, not the project.
-  chmod -R u+rwX "$root" 2>/dev/null
+  # find does not follow links and touches only folders; rm does not follow them either.
+  find "$root" -type d -exec chmod u+rwx {} + 2>/dev/null
   rm -rf "$root"
-  if [ -d "$x86" ]; then chmod -R u+rwX "$x86" 2>/dev/null; rm -rf "$x86"; fi
+  if [ -d "$x86" ]; then find "$x86" -type d -exec chmod u+rwx {} + 2>/dev/null; rm -rf "$x86"; fi
   __vscodroid_ub_unlock
   if [ -e "$root" ]; then echo "vscodroid: could not remove all of $root" >&2; return 1; fi
 
@@ -511,6 +568,38 @@ __vscodroid_ub_git_configure() {
   return 0
 }
 
+# The git inside Ubuntu goes through the same guard: /usr/local/bin/git is written from
+# git-token-guard.sh and runs the real /usr/bin/git. Rewritten only when it differs.
+# A line carrying a token is also dropped from the Ubuntu shell's history.
+__vscodroid_ub_git_guard_install() {
+  local root lib dst tmp rc
+  root=$(__vscodroid_ub_root); lib="$HOME/.vscodroid/git-token-guard.sh"; dst="$root/usr/local/bin/git"
+  [ -f "$lib" ] && [ -d "$root/usr/local/bin" ] || return 0
+  tmp="$dst.new.$$"
+  {
+    printf '%s\n' '#!/bin/bash' '# Written by VSCodroid: refuses remote addresses that carry a token, then runs git.'
+    cat "$lib"
+    printf '%s\n' '__vscodroid_tg_guest() {' \
+      '  local real=${VSCODROID_REAL_GIT:-/usr/bin/git}' \
+      '  if [ ! -x "$real" ]; then echo "git: not installed in Ubuntu yet (see ~/.vscodroid/git-setup.log, or run: apt install git)" >&2; return 127; fi' \
+      '  __vscodroid_tg_run "$real" "$@"' '}' '__vscodroid_tg_guest "$@"' 'exit $?'
+  } > "$tmp" 2>/dev/null || { rm -f "$tmp"; return 0; }
+  if [ -f "$dst" ] && cmp -s "$tmp" "$dst"; then rm -f "$tmp"; else chmod 755 "$tmp" && mv -f "$tmp" "$dst"; fi
+  rc="$root/root/.bashrc"
+  if ! grep -q '# vscodroid-token-scrub' "$rc" 2>/dev/null; then
+    cat >> "$rc" <<'RC_EOF'
+
+# vscodroid-token-scrub: forget a typed line that carries a password or token in a URL
+__vscodroid_scrub() {
+  local l; l=$(HISTTIMEFORMAT= history 1 2>/dev/null) || return 0
+  if printf '%s' "$l" | grep -Eq '://[^/@[:space:]]+:[^/@[:space:]]+@|://(gh[pousr]_|github_pat_)[A-Za-z0-9_]+@'; then history -d $((HISTCMD - 1)) 2>/dev/null; fi
+}
+PROMPT_COMMAND="__vscodroid_scrub${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+RC_EOF
+  fi
+  return 0
+}
+
 __vscodroid_ub_git_bootstrap() {
   local root marker log
   root=$(__vscodroid_ub_root)
@@ -535,6 +624,8 @@ __vscodroid_ub_git_bootstrap() {
 __vscodroid_ub_git_bg() {
   [ -n "${__vscodroid_ub_git_started-}" ] && return 0
   __vscodroid_ub_ready || return 0
+  __vscodroid_ub_mark_if_genuine
+  __vscodroid_ub_git_guard_install
   [ -f "$(__vscodroid_ub_root)/var/lib/vscodroid/provisioned/git" ] && return 0
   __vscodroid_ub_git_started=1
   # Started inside a second subshell so an interactive shell prints no "[1] 1234" job line.
@@ -552,8 +643,9 @@ __vscodroid_ub_git_login() {
   printf 'Username for %s: ' "$host" >&2; read -r user
   printf 'Token (typing is hidden): ' >&2; read -rs token; echo >&2
   if [ -z "$user" ] || [ -z "$token" ]; then echo "vscodroid: cancelled; nothing was saved" >&2; return 1; fi
-  printf 'protocol=https\nhost=%s\nusername=%s\npassword=%s\n\n' "$host" "$user" "$token" |
-    GIT_CONFIG_GLOBAL=/dev/null __vscodroid_orig_git -c "credential.helper=store --file $d/credentials" credential approve || return 1
+  ( umask 077
+    printf 'protocol=https\nhost=%s\nusername=%s\npassword=%s\n\n' "$host" "$user" "$token" |
+      GIT_CONFIG_GLOBAL=/dev/null __vscodroid_orig_git -c "credential.helper=store --file $d/credentials" credential approve ) || return 1
   chmod 600 "$d/credentials" 2>/dev/null
   token=
   echo "vscodroid: saved for $host in the app's private storage (not in any project)."
@@ -565,6 +657,7 @@ __vscodroid_ub_git_logout() {
   [ -f "$d/credentials" ] || { echo "vscodroid: nothing saved"; return 0; }
   printf 'protocol=https\nhost=%s\n\n' "$host" |
     GIT_CONFIG_GLOBAL=/dev/null __vscodroid_orig_git -c "credential.helper=store --file $d/credentials" credential reject
+  [ -s "$d/credentials" ] || rm -f "$d/credentials"
   echo "vscodroid: sign-in for $host removed"
 }
 
@@ -578,94 +671,16 @@ __vscodroid_ub_git_check() {
     echo "Ubuntu git:  not installed yet (see ~/.vscodroid/git-setup.log)"
   fi
   echo "helper:      $(__vscodroid_orig_git config --file "$d/gitconfig" credential.helper 2>/dev/null || echo 'not configured')"
-  if [ -s "$d/credentials" ]; then echo "sign-in:     saved (private storage, $(stat -c %a "$d/credentials" 2>/dev/null))"; else echo "sign-in:     none saved"; fi
+  if __vscodroid_shared_name "$d"; then echo "WARNING:     the sign-in folder is in shared storage ($d); it should be in private storage"; fi
+  [ -d "$d" ] && [ "$(stat -c %a "$d" 2>/dev/null)" != 700 ] && chmod 700 "$d" 2>/dev/null && echo "fixed:       $d was readable by others; now 700"
+  if [ -s "$d/credentials" ]; then
+    [ "$(stat -c %a "$d/credentials" 2>/dev/null)" != 600 ] && chmod 600 "$d/credentials" 2>/dev/null && echo "fixed:       credentials file was readable by others; now 600"
+    echo "sign-in:     saved (private storage, mode $(stat -c %a "$d/credentials" 2>/dev/null), plain file, not encrypted)"
+  else echo "sign-in:     none saved"; fi
   repo=$(__vscodroid_orig_git rev-parse --git-dir 2>/dev/null)
   if [ -n "$repo" ] && grep -Eq '://[^/@[:space:]]+:[^/@[:space:]]+@|://(gh[pousr]_|github_pat_)[A-Za-z0-9_]+@' "$repo/config" 2>/dev/null; then
     echo "WARNING:     this repository's remote address contains a password or token. Change it with:  git remote set-url origin https://github.com/OWNER/REPO.git"
   fi
-}
-
-# A token typed into a remote address ends up in .git/config, inside the project.
-__vscodroid_token_in_args() {
-  local a
-  for a in "$@"; do
-    case "$a" in
-      *://*:*@*|*://gh[pousr]_*@*|*://github_pat_*@*)
-        if printf '%s' "$a" | grep -Eq '://[^/@[:space:]]+:[^/@[:space:]]+@|://(gh[pousr]_|github_pat_)[A-Za-z0-9_]+@'; then
-          echo "vscodroid: that address contains a password or token. Git would write it into .git/config, inside your project." >&2
-          echo "          Use the plain address (https://github.com/OWNER/REPO.git) and sign in instead: through VS Code (Source Control)," >&2
-          echo "          or for Ubuntu's git:  ubuntu git-login   (override: VSCODROID_NO_TOKEN_GUARD=1)" >&2
-          return 0
-        fi ;;
-    esac
-  done
-  return 1
-}
-
-# ---- ubuntu doctor: what is wrong, and why -----------------------------------------
-# Read-only. Prints facts a failing command cannot: whether proot starts Ubuntu, whether
-# packages are consistent, whether the phone can reach Ubuntu's servers, how much room is
-# left, what THIS folder can and cannot do (links, permission bits, pipes, running programs),
-# and which tools exist inside Ubuntu. Changes nothing.
-__vscodroid_ub_doctor() {
-  local root d st audit mb line op
-  root=$(__vscodroid_ub_root); d=$(pwd -P 2>/dev/null || pwd)
-  echo "VSCodroid environment check (read-only)"
-  printf '%-14s %s\n' "Android" "$(getprop ro.build.version.release 2>/dev/null) (API $(getprop ro.build.version.sdk 2>/dev/null)), $(uname -m)"
-  if [ -x "${VSCODROID_PROOT-}" ] && [ -x "${PROOT_LOADER-}" ]; then
-    printf '%-14s %s\n' "proot" "found"
-  else
-    printf '%-14s %s\n' "proot" "MISSING: this build has no proot (VSCODROID_PROOT='${VSCODROID_PROOT-}')"
-  fi
-  if [ -e "$root/bin/sh" ] || [ -L "$root/bin/sh" ]; then
-    printf '%-14s %s\n' "Ubuntu" "installed ($(grep '^PRETTY_NAME=' "$root/etc/os-release" 2>/dev/null | cut -d= -f2 | tr -d '"'))"
-    __vscodroid_ub_exec /bin/true >/dev/null 2>&1; st=$?
-    if [ $st -eq 0 ]; then printf '%-14s %s\n' "starts" "yes"
-    else printf '%-14s %s\n' "starts" "NO (exit $st). Try: ubuntu repair. If the message mentions seccomp or SIGSYS: bash ~/.vscodroid/proot-test.sh"; fi
-    audit=$(__vscodroid_ub_exec dpkg --audit 2>&1); st=$?
-    if [ $st -eq 0 ] && [ -z "$audit" ]; then printf '%-14s %s\n' "packages" "consistent"
-    else printf '%-14s %s\n' "packages" "DAMAGED: $(printf '%s' "$audit" | head -n 1). Fix: ubuntu repair"; fi
-  else
-    printf '%-14s %s\n' "Ubuntu" "NOT installed. Run: ubuntu setup"
-  fi
-  if command -v timeout >/dev/null 2>&1; then
-    if timeout 6 bash -c 'exec 3<>/dev/tcp/ports.ubuntu.com/80' 2>/dev/null; then printf '%-14s %s\n' "network" "Ubuntu's package server is reachable"
-    else printf '%-14s %s\n' "network" "cannot reach ports.ubuntu.com (offline, or the network blocks it); apt install will fail"; fi
-  fi
-  mb=$(df -Pk "$HOME" 2>/dev/null | tail -n 1 | tr -s ' ' | cut -d' ' -f4)
-  [ -n "$mb" ] && printf '%-14s %s\n' "free space" "$((mb / 1024)) MB in the app's private storage (apt install default-jdk needs several hundred MB)"
-  if __vscodroid_shared_name "$d"; then
-    printf '%-14s %s\n' "this folder" "$d (Android shared storage)"
-    for op in symlink hardlink chmod fifo; do
-      case $op in symlink) line="symbolic links";; hardlink) line="hard links";; chmod) line="permission bits / owners";; fifo) line="pipes and device files";; esac
-      if __vscodroid_op_works "$op" "$d" 2>/dev/null; then printf '  %-26s %s\n' "$line" "supported"; else printf '  %-26s %s\n' "$line" "NOT supported here"; fi
-    done
-    printf '  %-26s %s\n' "running programs stored here" "NOT supported (use 'ubuntu ./prog' or 'bash script.sh')"
-  else
-    printf '%-14s %s\n' "this folder" "$d (not shared storage: links, permissions and programs work as on Linux)"
-  fi
-  if [ -e "$root/bin/sh" ] || [ -L "$root/bin/sh" ]; then
-    echo "Tools inside Ubuntu:"
-    __vscodroid_ub_exec /bin/sh -c 'for t in java javac gcc g++ clangd git; do printf "%s|%s\n" "$t" "$(command -v $t)"; done' 2>/dev/null |
-    while IFS='|' read -r t pth; do
-      if [ -n "$pth" ]; then printf '  %-8s %s\n' "$t" "$pth"
-      else
-        case "$t" in
-          java|javac) line="apt install default-jdk" ;;
-          gcc|g++)    line="apt install build-essential" ;;
-          clangd)     line="apt install clangd" ;;
-          git)        line="apt install git" ;;
-        esac
-        printf '  %-8s %s\n' "$t" "not installed (${line})"
-      fi
-    done
-  fi
-  if [ -n "${JAVA_HOME-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
-    printf '%-14s %s\n' "phone JDK" "$JAVA_HOME"
-  else
-    printf '%-14s %s\n' "phone JDK" "none. The VS Code Java extension runs on the phone itself and needs a JDK that runs there; Ubuntu's JDK is for the terminal only"
-  fi
-  return 0
 }
 
 ubuntu() {
@@ -734,19 +749,23 @@ done
 unset __n
 
 # ---- keep tokens out of project files -------------------------------------------
-# The phone's own `git` refuses a remote address that carries a password or token
-# (VSCODROID_NO_TOKEN_GUARD=1 turns this off).
+# The phone's own `git` goes through the same guard as the git inside Ubuntu
+# (git-token-guard.sh): it refuses a remote address that carries a password or token,
+# hides one already stored when remotes or config are listed, and a line that carries one
+# is dropped from the shell history. VSCODROID_NO_TOKEN_GUARD=1 turns the guard off.
+[ -f "$HOME/.vscodroid/git-token-guard.sh" ] && . "$HOME/.vscodroid/git-token-guard.sh"
 if declare -F git >/dev/null 2>&1; then
   eval "$(declare -f git | sed '1s/^git *()/__vscodroid_orig_git ()/')"
 else
   __vscodroid_orig_git() { command git "$@"; }
 fi
 git() {
-  if [ -z "${VSCODROID_NO_TOKEN_GUARD-}" ]; then
-    case "${1-}" in
-      remote) case "${2-}" in add|set-url) __vscodroid_token_in_args "${@:3}" && return 1 ;; esac ;;
-      clone|fetch|pull|push|ls-remote) __vscodroid_token_in_args "${@:2}" && return 1 ;;
-    esac
-  fi
-  __vscodroid_orig_git "$@"
+  if declare -F __vscodroid_tg_run >/dev/null 2>&1; then __vscodroid_tg_run __vscodroid_orig_git "$@"; else __vscodroid_orig_git "$@"; fi
 }
+case $- in
+  *i*)
+    if declare -F __vscodroid_tg_scrub_history >/dev/null 2>&1; then
+      if declare -p PROMPT_COMMAND 2>/dev/null | grep -q '^declare -a'; then PROMPT_COMMAND+=(__vscodroid_tg_scrub_history)
+      else PROMPT_COMMAND="__vscodroid_tg_scrub_history${PROMPT_COMMAND:+;$PROMPT_COMMAND}"; fi
+    fi ;;
+esac

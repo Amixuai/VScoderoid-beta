@@ -27,7 +27,7 @@ on a computer.
 
 ## What the app does with the access
 
-- It opens only its workspace folder (`/storage/emulated/0/vscodroid`) and folders the user picks.
+- It opens only its workspace folder (`/storage/emulated/0/VSCodroid`) and folders the user picks.
 - Files are read and written with ordinary file calls; nothing is uploaded and nothing is indexed.
 - An empty `.nomedia` keeps the workspace out of Gallery and Recent.
 

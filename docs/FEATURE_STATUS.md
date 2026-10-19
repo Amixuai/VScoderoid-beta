@@ -4,7 +4,7 @@ Updated 2026-10-15. "Tested" says where. Nothing marked "pending" has been run o
 
 | Feature | State | Where tested |
 |---------|-------|--------------|
-| Workspace in public storage (`/storage/emulated/0/vscodroid`), All files access prompt | Built | Owner's Android 13 phone: workspace opened, terminal started in it |
+| Workspace in public storage (`/storage/emulated/0/VSCodroid`), All files access prompt | Built | Owner's Android 13 phone: workspace opened, terminal started in it |
 | `.nomedia` in the workspace root | Built | Not checked against phone search (see below) |
 | Old private folder no longer reopened after permission is granted | Built | Pending a phone run |
 | Open Folder opens Android's folder picker (menu, long-press, Explorer; command override plus WebView fallback) | Built | Pending a phone run |
@@ -23,6 +23,10 @@ Updated 2026-10-15. "Tested" says where. Nothing marked "pending" has been run o
 | Java extensions | Depend on a phone-side JDK | Not verified (J4-J5) |
 | C/C++ IntelliSense (Microsoft C/C++, clangd) | Not supported | See EXTENSION_COMPATIBILITY.md |
 | Automatic `Projects`/`Backups`/`Exports` folders | Rejected, not implemented | `scripts/check-no-forced-folders.py` passes |
+| Reset/repair only act on a positively recognised app-owned Ubuntu (path, link and marker checks) | Built | Sandbox with a stand-in for proot; phone run pending (P1-P5, R1) |
+| Git token guard for the phone's git and Ubuntu's git; masking; history; logout cleanup; mode checks | Built | Real git in temporary repositories and real interactive shells; the Ubuntu wrapper run directly, not inside proot; phone run pending (G1-G8, S1) |
+| Public Workspace spelled `VSCodroid`, an existing `vscodroid` kept | Built (Kotlin not compiled) | Not run; phone run pending (W1-W4) |
+| Git sign-in encryption | Not built, not claimed | Plain file in private storage |
 | Hiding project files from phone-wide search | **Not solved** | A dot-folder was tried and removed; `.nomedia` covers the media scanner only |
 | Intel (x86_64) programs: `ubuntu x86 setup`, `ubuntu x86 run ./prog` (qemu-user inside Ubuntu, amd64 libraries unpacked beside it) | Built, experimental | Setup and run commands checked in the sandbox with stand-ins; real emulation pending a phone run. Slow by nature; prebuilt binaries only |
 | USB / Arduino flashing | Not built | Needs an Android USB service and a serial-over-TCP bridge |
@@ -41,6 +45,7 @@ Updated 2026-10-15. "Tested" says where. Nothing marked "pending" has been run o
 | `08-RISK_MATRIX.md`, `11-GLOSSARY.md` | New risks and terms |
 | `PLAY_STORE_ALL_FILES_ACCESS.md` (new) | Declaration answers and fallback |
 | `FEATURE_STATUS.md` (new) | This page |
+| `STORAGE_MAP.md`, `DEVICE_TESTS_GROUP1_FIXES.md` (new) | Where things live and what protects them; phone tests for the Group 1 fixes |
 | `EXTENSION_COMPATIBILITY.md`, `DEVICE_TESTS_STABILITY.md` (new) | Which extensions work and why; phone tests for storage errors, toolchains, extensions |
 | `DEVICE_TESTS_BUILD_CTRLC.md` (new) | Phone tests for build tasks, extensions and Ctrl+C |
 | `ANDROID_LIMITATION_LOG.md`, `DEVICE_TESTS_RECOVERY_GIT.md` (new) | Investigation record and phone tests for Ubuntu recovery and Git |

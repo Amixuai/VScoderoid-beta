@@ -37,6 +37,8 @@ line records when the document was first written, not when it last changed; see
 | [Device tests: build and Ctrl+C](./DEVICE_TESTS_BUILD_CTRLC.md) | Phone tests for tasks, Code Runner, NPM Scripts, Ctrl+C |
 | [Extension compatibility](./EXTENSION_COMPATIBILITY.md) | Which extensions work, which do not, and why |
 | [Device tests: storage errors, toolchains](./DEVICE_TESTS_STABILITY.md) | Phone tests, none run yet |
+| [Where things live](./STORAGE_MAP.md) | What is in the Public Workspace, what is private, what is protected |
+| [Device tests: Group 1 fixes](./DEVICE_TESTS_GROUP1_FIXES.md) | Phone tests, none run yet |
 | [The last 5%](./FINAL_5_PERCENT.md) | x86, USB, Docker, GUI, search: status and what each needs |
 
 ### Unnumbered References

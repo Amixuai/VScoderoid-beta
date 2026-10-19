@@ -260,7 +260,7 @@ to: patch 0005 disables the service worker upstream uses to scope each webview t
 | `FOREGROUND_SERVICE`             | Keep Node.js alive in background                | Install time   |
 | `FOREGROUND_SERVICE_SPECIAL_USE` | Dev server foreground service type              | Install time   |
 | `POST_NOTIFICATIONS`             | Foreground Service notification (API 33+)       | Runtime        |
-| `MANAGE_EXTERNAL_STORAGE`        | Projects live in `/storage/emulated/0/vscodroid` (see 4.3) | Special access screen |
+| `MANAGE_EXTERNAL_STORAGE`        | Projects live in `/storage/emulated/0/VSCodroid` (see 4.3) | Special access screen |
 
 Those five are what **this app's own** `AndroidManifest.xml` declares. The **installed** app holds
 more, because the manifest merger adds permissions from libraries, and a Play Store listing shows
@@ -379,3 +379,11 @@ If a malicious extension is reported:
 | Storage permission scope               | Attempt to read/write outside app directory                        | Every release |
 | AndroidBridge token enforcement        | Call bridge methods with a wrong or absent token, verify rejected  | Every release |
 | Backup exclusion verification          | Validate backup payload excludes `~/.ssh`, `.gitconfig`, workspace | Every release |
+
+### 4.4 Git sign-in storage and token guard (2026-10-19)
+
+The Ubuntu Git sign-in is a plain file (`~/.vscodroid/ubuntu-git/credentials`, folder mode 700, file mode 600) in private
+storage, outside backups. It is not encrypted and no Keystore encryption exists. The guard (`git-token-guard.sh`) refuses
+token-carrying remote addresses for the phone's `git` and Ubuntu's, hides stored ones in output and drops the typed line
+from history; a program that runs `/usr/bin/git` by full path, or passes a token another way, is not covered. Reset and
+repair act only on a folder recognised as the app's own Ubuntu.
