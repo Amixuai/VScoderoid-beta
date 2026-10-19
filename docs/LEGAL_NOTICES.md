@@ -775,4 +775,4 @@ For questions about licenses, trademarks, or legal notices:
 
 ---
 
-_This document was last updated on October 7, 2026._
+_This document was last updated on October 22, 2026._
