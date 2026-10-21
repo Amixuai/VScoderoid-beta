@@ -1,5 +1,10 @@
 # Device tests: Group 1 fixes (reset path validation, Git token protection, workspace path)
 
+> **Historical (superseded by Update-11).** The commands in this file (`ubuntu setup`, `ubuntu reset`, `ubuntu repair`,
+> `ubuntu doctor`, `ubuntu git-login` and friends) no longer exist. Ubuntu now installs itself on first use, repairs a cut-off
+> install by itself, and is reinstalled only from the Command Palette ("VSCodroid: Reinstall Linux Environment"). Read each
+> row as the behaviour to check, triggered the new way. See docs/UBUNTU_ROUTING.md.
+
 None has been run on a phone yet. Record the result next to each line.
 
 | # | Test | Expected |

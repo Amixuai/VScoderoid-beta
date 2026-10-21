@@ -104,7 +104,7 @@ When you run commands like `npm install` or `pip install` in the terminal, those
 ### Linux Environment (User-Initiated)
 
 If you use the Ubuntu environment (the first time you run a compiler or
-`ubuntu setup`), the app downloads Ubuntu's official minimal system from
+another tool that lives in Ubuntu), the app downloads Ubuntu's official minimal system from
 `cdimage.ubuntu.com`, checks it against the checksum published beside it, and
 installs packages (gcc, Python and so on) from Ubuntu's package servers
 (`ports.ubuntu.com`) when you first use a tool that needs them. The system is
@@ -112,9 +112,9 @@ stored in the app's private storage. Those servers see an ordinary download
 request from your device. VSCodroid does not collect any data during this.
 
 The first time the Ubuntu environment is ready, the app also installs Git inside it from those same package servers.
-If you use `ubuntu git-login`, the username and token you type are kept in a file in the app's private storage (not in
+If you sign in to a Git server from Ubuntu's Git (it asks for a username and token when it needs them), what you type is kept in a file in the app's private storage (not in
 any project, not in a backup). The file is not encrypted; it is protected by the app's private storage and by file permissions only and are used only when Git inside Ubuntu contacts the server you named. They are not sent
-to VSCodroid or anyone else, and `ubuntu git-logout` removes them.
+to VSCodroid or anyone else, and `git credential reject` removes them.
 
 ### SSH Connections (User-Initiated)
 

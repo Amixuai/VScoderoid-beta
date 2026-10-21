@@ -104,8 +104,7 @@ in the sandbox; the Kotlin is not compiled here and nothing is run on a phone ye
 
 When `cp`, `mv`, `tar`, `ln`, `chmod`, `chown`, `chgrp`, `mkfifo` or `mknod` fails in shared storage because the storage
 cannot do that, the tool's own error is shown unchanged and one line names the limit. Nothing is added for other errors,
-and `VSCODROID_NO_FS_NOTES=1` turns it off. There is no `ubuntu doctor` command: a user needs no diagnostic command to use
-the tools. The checks (proot present, Ubuntu present and startable, packages consistent, free space, what the folder
+and `VSCODROID_NO_FS_NOTES=1` turns it off. There is no diagnostic command: a user needs none to use the tools. The checks (proot present, Ubuntu present and startable, packages consistent, free space, what the folder
 supports) are an internal function that the install path runs after a failure; it writes `~/.vscodroid/ubuntu.log`, and the
 automated test calls it. The old description of `doctor` also listed a network check and a tool inventory (`java`, `clangd`
 ...); those are not provided any more.

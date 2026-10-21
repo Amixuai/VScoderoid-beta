@@ -105,7 +105,7 @@ def wanted(tf):
 
 os.makedirs(root, exist_ok=True)
 # Markers: "installing" while unpacking (so an interrupted install can still be recognised
-# and reset), "ubuntu" once complete. `ubuntu reset` only ever removes a folder it can
+# and reset), "ubuntu" once complete. The reinstall only ever removes a folder it can
 # recognise by these (or, for older installs, by a genuine Ubuntu os-release).
 installing = os.path.join(root, ".vscodroid-installing")
 open(installing, "w").write(distro + "\n")
@@ -123,7 +123,7 @@ else
 fi
 
 # The Intel root filesystem is only unpacked: its programs run through qemu inside
-# the arm64 Ubuntu (ubuntu x86 run ...), never started by proot directly.
+# the arm64 Ubuntu (started automatically for an Intel program), never started by proot directly.
 if [ "$DISTRO" = "ubuntu-amd64" ]; then
   say "PASS: the Intel (amd64) Ubuntu files are unpacked in $ROOT"
   exit 0

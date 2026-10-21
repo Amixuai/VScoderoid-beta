@@ -2723,5 +2723,5 @@ Status per item is in [FEATURE_STATUS](./FEATURE_STATUS.md).
 
 - Public-storage workspace with All files access, `.nomedia`, native folder picker.
 - Terminal command wrapper for the missing symbolic links, and Ubuntu (proot) routing for compilers and runtimes.
-- Dev-server browser opening; experimental `ubuntu gui`.
-- `ubuntu repair` / `ubuntu reset`, the "Reinstall Linux Environment" palette command, and background Git setup with a private sign-in store (2026-10-16).
+- Dev-server browser opening; experimental graphical desktop (started automatically for tkinter/pygame programs since Update-11; was `ubuntu gui`).
+- `ubuntu repair` / `ubuntu reset` (commands removed in Update-11; replaced by automatic repair), the "Reinstall Linux Environment" palette command, and background Git setup with a private sign-in store (2026-10-16).

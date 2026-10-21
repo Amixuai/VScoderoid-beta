@@ -1,5 +1,10 @@
 # Device tests: Ubuntu recovery and Git
 
+> **Historical (superseded by Update-11).** The commands in this file (`ubuntu setup`, `ubuntu reset`, `ubuntu repair`,
+> `ubuntu doctor`, `ubuntu git-login` and friends) no longer exist. Ubuntu now installs itself on first use, repairs a cut-off
+> install by itself, and is reinstalled only from the Command Palette ("VSCodroid: Reinstall Linux Environment"). Read each
+> row as the behaviour to check, triggered the new way. See docs/UBUNTU_ROUTING.md.
+
 Run on a phone; record the result next to each line. None has been run yet.
 
 | # | Test | Expected |

@@ -331,8 +331,8 @@ The decisions these risks settled, and what each one buys:
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|-----------|
-| `ubuntu reset` removes user files | Low | Critical | Removes only `*/proot/ubuntu*` in private storage, refuses other paths, asks first, `rm` does not follow links; tested with a link to a project |
-| A Git token ends up in a project | Medium | High | Address guard in the phone's `git`; token typed hidden and passed on stdin; `ubuntu git-check` warns |
+| The Ubuntu reinstall removes user files | Low | Critical | Removes only `*/proot/ubuntu*` in private storage, refuses other paths, asks first, `rm` does not follow links; tested with a link to a project |
+| A Git token ends up in a project | Medium | High | Address guard in the phone's `git`; Ubuntu's Git asks for the token itself (hidden) and stores it privately; its guard refuses addresses carrying one |
 | Ubuntu git sign-in is a plain file | Certain | Medium | Private storage, mode 600, excluded from backups; stronger storage needs Android Keystore work (ANDROID_LIMITATION_LOG) |
 | Two package installs collide | Medium | Low | One lock for all of ours; a dead owner's lock is cleared |
 
@@ -342,15 +342,15 @@ The decisions these risks settled, and what each one buys:
 |------|-----------|--------|-----------|
 | Job control under proot is refused on some phones | Low | Medium | `VSCODROID_UB_NO_JOB=1` restores the older behaviour; device test C1/C3 |
 | `type: process` tasks cannot find a compiler | Certain | Medium | Documented; use shell tasks (SELinux blocks a program file in app storage) |
-| A program with spaces in its path gets no `./name` | Medium | Low | `ubuntu ./prog` works |
+| A program with spaces in its path gets no `./name` | Medium | Low | Run it with `bash`/the full path inside Ubuntu (`sudo -i`) |
 
 ## Added 2026-10-18 (storage errors, toolchains)
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|-----------|
 | The storage-limit line is shown for another cause | Low | Medium | It needs matching error text, shared storage, a writable folder and a failed trial of the operation; otherwise nothing is added |
-| Java or C++ extensions are assumed to work with Ubuntu's tools | High | Medium | EXTENSION_COMPATIBILITY.md says which need phone-side tools; `ubuntu doctor` shows the phone JDK |
-| `apt install default-jdk` fails (space, network, post-install step) | Medium | Medium | `ubuntu doctor` names the cause; DEVICE_TESTS_STABILITY.md J1-J2 |
+| Java or C++ extensions are assumed to work with Ubuntu's tools | High | Medium | EXTENSION_COMPATIBILITY.md says which need phone-side tools; the old `ubuntu doctor` tool inventory no longer exists |
+| `apt install default-jdk` fails (space, network, post-install step) | Medium | Medium | apt prints its own error; the install path logs to `~/.vscodroid/ubuntu.log`; DEVICE_TESTS_STABILITY.md J1-J2 |
 
 ## Added 2026-10-19 (Group 1 follow-up)
 
@@ -358,5 +358,5 @@ The decisions these risks settled, and what each one buys:
 |------|-----------|--------|-----------|
 | Reset removes a folder that only looks like Ubuntu | Very low | Critical | Canonical-path, link, marker and shared-storage checks before any question; refusal states the reason |
 | A genuine but damaged Ubuntu is refused | Low | Low | The installer marker survives damage; an interrupted install is marked |
-| Token passed in a way the guard does not inspect | Medium | Medium | Listed in STORAGE_MAP.md; sign-in via `ubuntu git-login` and VS Code |
+| Token passed in a way the guard does not inspect | Medium | Medium | Listed in STORAGE_MAP.md; sign-in through Git's own prompt and VS Code |
 | Lower-case `vscodroid` and `VSCodroid` both exist on a case-sensitive phone | Low | Low | The existing folder is kept; no second folder is made |

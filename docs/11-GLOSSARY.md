@@ -214,8 +214,8 @@ Shell functions that catch a command such as `gcc` and run it in Ubuntu instead 
 **Credential helper**
 A small program Git calls to fetch or save a username and password. `store` keeps them in a file.
 
-**`ubuntu reset` / `ubuntu repair`**
-Commands that reinstall the Ubuntu system in private storage without touching projects.
+**Reinstall Linux Environment**
+A Command Palette entry that reinstalls the Ubuntu system in private storage without touching projects. (The `ubuntu reset` and `ubuntu repair` commands were removed in Update-11.)
 
 **Process group / job control**
 A group of processes the terminal signals together (Ctrl+C goes to the foreground group). A shell with job control gives each command its own group.

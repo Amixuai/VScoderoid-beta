@@ -543,10 +543,13 @@ managers. Work that has to survive either belongs in a folder opened through the
 - `assets/ubuntu-env.sh` routes gcc, g++, make, cmake, python, pip, cargo, rustc, go and apt into
   an Ubuntu system run through `proot` (`libproot.so`, `libproot-loader.so`, `libtalloc.so.2`),
   kept in `~/proot/ubuntu`. Programs built in shared storage run through a private copy.
-- After a dev server starts, the wrapper opens it in the phone's browser; `ubuntu gui start` shows a
-  virtual screen (experimental).
-- `ubuntu repair` / `ubuntu reset` (in `assets/ubuntu-env.sh`) remove and reinstall only `~/proot/ubuntu*` in private
-  storage; the saf-bridge extension adds the Command Palette entry that runs it in a terminal.
+- After a dev server starts, the wrapper opens it in the phone's browser; a Python program that imports tkinter, pygame and similar starts a
+  virtual screen automatically (experimental).
+- The first use of a Linux tool installs Ubuntu by itself and clears an interrupted install; `dpkg --configure -a` runs
+  before `apt`/`dpkg` when a package install was cut off (all in `assets/ubuntu-env.sh`). The only destructive action is the
+  reinstall (`__vscodroid_ub_reset`), which removes and reinstalls only `~/proot/ubuntu*` in private storage; the saf-bridge
+  extension's Command Palette entry runs it in a terminal. `type: process` callers reach the routed compilers through
+  launcher rows in the exec table (`ToolchainManager.addUbuntuRows`).
 - Ubuntu's Git is installed in the background and configured through `~/.vscodroid/ubuntu-git` (bound into Ubuntu, kept
   across a reset). Sign-in is git's `store` helper on that private file. Package installs share one lock.
 
@@ -623,6 +626,6 @@ reaches Logcat alone, and a report quotes the last 20 lines.
 
 - Foreground commands from the terminal start under a guest shell with job control (`ubuntu-env.sh`), so Ctrl+C reaches the command's own process group, not proot. Built programs are defined under their typed, absolute and `./` paths; Code Runner is defaulted to the terminal (`code-runner.runInTerminal`) in the machine settings.
 
-- `assets/command-wrapper.sh` adds one line naming the storage limit when cp, mv, tar, ln, chmod and similar fail in shared storage for that reason (checked by a trial of the operation, never assumed). `ubuntu doctor` in `ubuntu-env.sh` reports the environment read-only. `scripts/check-no-forced-folders.py` guards against creating `Projects`, `Backups` or `Exports`.
+- `assets/command-wrapper.sh` adds one line naming the storage limit when cp, mv, tar, ln, chmod and similar fail in shared storage for that reason (checked by a trial of the operation, never assumed). An internal read-only check (`__vscodroid_ub_selfcheck` in `ubuntu-env.sh`) logs the environment to `~/.vscodroid/ubuntu.log`. `scripts/check-no-forced-folders.py` guards against creating `Projects`, `Backups` or `Exports`.
 
 - Reset and repair recognise the app's own Ubuntu by canonical path, link and marker checks before acting (`__vscodroid_ub_is_ours`); the installer writes the markers. `assets/git-token-guard.sh` is the one guard used by the phone's `git` and by the `git` written into Ubuntu. `PublicStorage.rootDir()` names the workspace `VSCodroid` and keeps an existing `vscodroid` folder.

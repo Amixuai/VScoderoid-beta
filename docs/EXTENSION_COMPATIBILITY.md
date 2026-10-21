@@ -14,5 +14,5 @@ terminal and shell tasks run in Ubuntu through the routing described in UBUNTU_R
 | clangd (Open VSX) | A clangd the phone can start | **Not provided.** Ubuntu's clangd cannot be started by the extension directly |
 | Python | The phone's Python | Existing behaviour; unchanged |
 
-Tools needed in Ubuntu for terminal workflows are installed with `apt` (`ubuntu doctor` lists what is present). Nothing is
+Tools needed in Ubuntu for terminal workflows are installed with `apt` (`which TOOL` shows whether one is present). Nothing is
 preinstalled to avoid an install step.

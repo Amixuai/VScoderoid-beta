@@ -298,7 +298,7 @@ that is synchronised back is slow and can lose edits.
 | Programs in the terminal reach everything the phone allows | Same as a computer; proot binds the current folder and `/storage/emulated/0`, nothing from the app's private storage other than the Ubuntu system itself |
 | Projects appear in Gallery or Recent | An empty `.nomedia` in the workspace root; the media scanner skips the folder. Phone-wide search apps are not controlled by it |
 | Play policy | Needs the Play "All files access" declaration; see [PLAY_STORE_ALL_FILES_ACCESS](./PLAY_STORE_ALL_FILES_ACCESS.md). Fallback: a build without the permission that uses the SAF mirror |
-| A token typed into a remote address lands in `.git/config` inside a project | The phone's `git` refuses addresses with a password or token; `ubuntu git-check` warns about one already there |
+| A token typed into a remote address lands in `.git/config` inside a project | The phone's `git` refuses addresses with a password or token; the Git guard hides a stored one when remotes or config are listed |
 | Ubuntu reset removes the wrong folder | The command refuses any path but `*/proot/ubuntu`, never one in shared storage, and `rm` does not follow links; tested with a link to a project |
 | Shared storage has no symbolic links and no executable files | Handled in the terminal by `assets/command-wrapper.sh` and `assets/ubuntu-env.sh`; see [SYMLINKS_ON_PUBLIC_STORAGE](./SYMLINKS_ON_PUBLIC_STORAGE.md) and [UBUNTU_ROUTING](./UBUNTU_ROUTING.md) |
 
