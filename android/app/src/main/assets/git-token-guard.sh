@@ -58,7 +58,7 @@ __vscodroid_tg_check() {
   [ $refuse -eq 1 ] || return 1
   echo "vscodroid: that command carries a password or token in a remote address. Git would write it into .git/config, inside your project." >&2
   echo "          Use the plain address (https://github.com/OWNER/REPO.git) and sign in instead: through VS Code (Source Control)," >&2
-  echo "          or for Ubuntu's git:  ubuntu git-login   (override: VSCODROID_NO_TOKEN_GUARD=1)" >&2
+  echo "          or let Ubuntu's git ask for the username and token itself when it needs them   (override: VSCODROID_NO_TOKEN_GUARD=1)" >&2
   return 0
 }
 

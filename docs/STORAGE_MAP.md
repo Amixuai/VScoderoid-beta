@@ -19,10 +19,10 @@ Downloads go where you choose; nothing is forced into `VSCodroid`.
 
 | Protection | State |
 |------------|-------|
-| `ubuntu reset` and `repair` remove only `~/proot/ubuntu*`, and only a folder recognised as the app's own: exactly the app's home plus `proot/ubuntu` once links are resolved, not itself a link, with the installer's marker (or a genuine Ubuntu os-release for older installs). Otherwise nothing is removed and the reason is shown | Checked in a sandbox with a stand-in for proot |
+| The reinstall (Command Palette) and the clean-up of an interrupted install remove only `~/proot/ubuntu*`, and only a folder recognised as the app's own: exactly the app's home plus `proot/ubuntu` once links are resolved, not itself a link, with the installer's marker (or a genuine Ubuntu os-release for older installs). Otherwise nothing is removed and the reason is shown | Checked in a sandbox with a stand-in for proot |
 | The Public Workspace is never touched by reset or repair, including when a link inside Ubuntu points at a project | Checked in a sandbox |
 | A remote address carrying a password or token is refused by the phone's `git` and by the `git` inside Ubuntu (also after `-C <path>` and `-c`); one already stored is hidden when remotes or config are listed; a typed line carrying one is dropped from shell history | Checked with real git and real interactive shells; the Ubuntu wrapper was run directly, not inside proot |
-| The Git sign-in is a plain file in private storage (folder 700, file 600; `ubuntu git-check` repairs loose modes). **It is not encrypted** | Checked in a sandbox. No Keystore encryption exists or is claimed |
+| The Git sign-in is a plain file in private storage (folder 700, file 600; loose modes are corrected automatically). **It is not encrypted** | Checked in a sandbox. No Keystore encryption exists or is claimed |
 | Tokens never printed by the app's own messages or its setup log | Checked in a sandbox |
 
 ## Not covered

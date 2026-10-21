@@ -47,8 +47,8 @@ folder picker: tap to the folder you want. A new empty folder can be made from t
 
 **Terminal.** Type the same commands as on a PC. `gcc`, `g++`, `make`, `python`, `pip`, `cargo`
 and `apt` run in the Ubuntu system (installed on first use, a few minutes, needs internet).
-`ubuntu` opens an Ubuntu shell; `./program` runs what you built; `native cmd` runs the phone's own
-version. After `npm start` or `python -m http.server` the page opens in your browser. Android's
+`./program` runs what you built; `sudo -i` opens a shell inside Ubuntu; `command cmd` runs the phone's own
+version of a command, if it has one. After `npm start` or `python -m http.server` the page opens in your browser. Android's
 shared storage has no symbolic links, so `npm install` and `python -m venv` are adjusted for you.
 See [UBUNTU_ROUTING](./UBUNTU_ROUTING.md) and [SYMLINKS_ON_PUBLIC_STORAGE](./SYMLINKS_ON_PUBLIC_STORAGE.md).
 
@@ -56,14 +56,15 @@ See [UBUNTU_ROUTING](./UBUNTU_ROUTING.md) and [SYMLINKS_ON_PUBLIC_STORAGE](./SYM
 
 If a wrong command breaks Ubuntu, you do not need to reinstall the app.
 
-- In the terminal: `ubuntu repair` checks Ubuntu and reinstalls it only if it is damaged; `ubuntu reset` reinstalls it
-  anyway.
-- From the Command Palette: **VSCodroid: Reinstall Linux Environment** (it runs `ubuntu reset` in a terminal).
+- An interrupted installation of Ubuntu itself is cleaned up and started again the next time you use a Linux tool. A
+  package installation that was cut off is finished before the next `apt` or `dpkg` command. You type nothing for this.
+- To reinstall Ubuntu anyway, use the Command Palette: **VSCodroid: Reinstall Linux Environment**. It opens a terminal
+  and asks first.
 
 Before anything is removed you are asked: "Warning: This will wipe all packages installed inside Ubuntu. Your files in
 /VSCodroid will NOT be deleted. Proceed? [Y/n]". Enter or `y` goes ahead; anything else cancels. Only the Ubuntu system in
 the app's private storage is replaced. Your projects, and your Git settings and sign-in, are kept. Python virtual
-environments made before need to be created again. In a script, `ubuntu reset --yes` skips the question.
+environments made before need to be created again.
 
 ### Git in Ubuntu and signing in
 
@@ -71,8 +72,9 @@ The first time Ubuntu is ready, Git is installed inside it in the background (lo
 `cargo`, `pip` and the Ubuntu shell can fetch from Git. Source Control and the terminal's own `git` keep using the
 phone's Git and VS Code's GitHub sign-in as before.
 
-- `ubuntu git-login` asks for a username and a token (typing is hidden) and stores them for Ubuntu's Git in the app's
-  private storage. `ubuntu git-logout` removes them; `ubuntu git-check` shows what is set up.
+- Ubuntu's Git signs in the usual way: when `git clone` or `git push` needs it, Git asks for a username and a token
+  (typing is hidden) and stores them for Ubuntu's Git in the app's private storage. `git credential reject` removes a
+  stored sign-in. The folder and file are kept private (700 and 600) on their own.
 - A GitHub token is entered as the password. Make a token with only the access you need.
 - The sign-in is a protected file in private storage, not encrypted, and it is never in a project or in a backup.
 - `git remote add`, `clone`, `fetch`, `pull` and `push` refuse an address that carries a password or token, because Git
@@ -1431,7 +1433,8 @@ Read it before you share it. The server log can name your files and folders, and
 Standard `.vscode/tasks.json` tasks of type `shell` run in the terminal's shell, so `gcc`, `g++`, `make`, `python`,
 `cargo` and `npm` in them run the way they do when you type them (compilers and Python in Ubuntu). Run them with
 Terminal > Run Build Task. Output and errors appear in the task terminal, and a failing task does not stop the editor.
-Tasks of type `process` that name a compiler directly are not supported on Android; use `shell`. Code Runner is set to
+Tasks of type `process` that name a compiler that lives in Ubuntu (`gcc`, `g++`, `cc`, `c++`, `cpp`, `cmake`, `cargo`, `rustc`) now reach the same
+routing, with the arguments passed one by one (written; not yet run on a phone). Code Runner is set to
 use the integrated terminal. NPM Scripts runs `npm` tasks as usual.
 
 ### Stopping a program (Ctrl+C)
@@ -1443,8 +1446,7 @@ programs run in Ubuntu: the program gets the interrupt itself, as on a PC, and t
 ### When a command fails in your projects folder
 
 Android's shared storage cannot hold symbolic or hard links, change permission bits, hold pipes, or run programs stored
-in it. If a command fails for one of those reasons you see its normal error, then one line saying so. `ubuntu doctor`
-lists what your current folder supports and what is wrong with Ubuntu, if anything. Install what you need with `apt`
+in it. If a command fails for one of those reasons you see its normal error, then one line saying so. Install what you need with `apt`
 (for example `apt install default-jdk`); nothing is installed in advance. The app creates only your projects folder; it
 never creates `Projects`, `Backups` or `Exports` inside it. Extension support is listed in
 [EXTENSION_COMPATIBILITY](./EXTENSION_COMPATIBILITY.md).
@@ -1452,7 +1454,7 @@ never creates `Projects`, `Backups` or `Exports` inside it. Extension support is
 ### Where your files live, and Git safety
 
 Your projects stay in `/storage/emulated/0/VSCodroid` so you can see them in a file manager; caches, the Ubuntu system and
-the Git sign-in are in private storage (full table: [STORAGE_MAP](./STORAGE_MAP.md)). `ubuntu reset` removes only the
+the Git sign-in are in private storage (full table: [STORAGE_MAP](./STORAGE_MAP.md)). Reinstalling Ubuntu removes only the
 Ubuntu system and refuses if it cannot be sure which folder that is. The Git sign-in for Ubuntu is kept in private
 storage as a plain file; it is **not encrypted**. A command that puts a password or token inside a remote address is
 refused, in the phone's terminal and inside Ubuntu.

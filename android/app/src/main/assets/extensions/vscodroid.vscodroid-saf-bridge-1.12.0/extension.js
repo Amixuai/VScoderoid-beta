@@ -157,15 +157,23 @@ function activate(context) {
     context.subscriptions.push(...openFolderOverrides);
 
     // -- Reinstall Linux Environment --
-    // Opens a terminal and runs `ubuntu reset` in it. The question ("Proceed? [Y/n]")
-    // and everything after it happen there, where the user can see it; only the
-    // Ubuntu system in private storage is replaced, never a project.
+    // Opens a terminal that runs the reinstall directly, so nobody types a command.
+    // The question ("Proceed? [Y/n]") and everything after it happen there, where the
+    // user can see it; only the Ubuntu system in private storage is replaced, never a
+    // project. The terminal waits for Enter at the end so the result can be read.
     const reinstallLinuxCmd = vscode.commands.registerCommand(
         'vscodroid.reinstallLinux',
         () => {
-            const terminal = vscode.window.createTerminal({ name: 'Linux Environment' });
+            const script =
+                '. "$HOME/.vscodroid/command-wrapper.sh"; ' +
+                '__vscodroid_ub_reset reset; st=$?; printf "\\n"; ' +
+                'read -r -p "Press Enter to close this terminal. " _; exit $st';
+            const terminal = vscode.window.createTerminal({
+                name: 'Linux Environment',
+                shellPath: 'bash',
+                shellArgs: ['-c', script],
+            });
             terminal.show();
-            terminal.sendText('ubuntu reset');
         }
     );
     context.subscriptions.push(reinstallLinuxCmd);

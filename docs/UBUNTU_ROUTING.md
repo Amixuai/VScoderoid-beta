@@ -25,23 +25,26 @@ version of the command (python, make), the phone's version runs instead.
   is defined for each program built in the folder (after a compile, and at each
   prompt when the folder changes); it runs a private copy inside Ubuntu. Only
   files that start with the Linux program header and have a plain name get one.
-  `ubuntu ./hello` does the same explicitly, and `ubuntu` alone opens an Ubuntu
+  An Intel program found the same way is run through qemu. `sudo -i` opens an Ubuntu
   shell. `cargo` keeps its build folder inside Ubuntu (`cargo run` works).
 - **Python environments.** `python -m venv .venv` creates the environment inside
   Ubuntu; `.venv/bin/activate` points to it. `pip install` outside an environment
   is allowed (the system "externally managed" lock is turned off).
-- **Opt out.** `VSCODROID_NO_UBUNTU=1 cmd` or `native cmd` runs the phone's own
-  command.
-- **Setup.** `ubuntu setup` installs the Ubuntu system (same as the test script).
+- **Opt out.** `command cmd` runs the phone's own command, if it has one (`VSCODROID_NO_UBUNTU=1` does the same
+  for tasks and tests).
+- **Setup.** The first use of a tool that lives in Ubuntu installs the Ubuntu system by itself (the same script as the
+  test script), under the package lock, after checking free space. A folder left by an interrupted install is removed
+  first, only if it is positively the app's own. If the download or the install fails, the message says so and it is
+  tried again next time.
 
 ## Graphical programs (Tkinter, Pygame) - experimental
 
-`ubuntu gui start` installs a virtual screen (Xtigervnc), a window manager
-(openbox) and noVNC inside Ubuntu, starts them, and opens the screen in the
-phone's browser at `http://localhost:6080`. While it runs, `python3 game.py` and
-other routed commands draw on it. `ubuntu gui stop` ends it. It needs a few
-hundred MB the first time. It is not shown inside a VS Code tab yet; the page
-opens in the browser.
+Running a Python program that imports `tkinter`, `pygame`, `turtle`, `pyglet` or `kivy` starts a virtual screen
+(Xtigervnc), a window manager (openbox) and noVNC inside Ubuntu and opens the screen in the phone's browser at
+`http://localhost:6080`; the program draws on it. The first time, a terminal is asked once ("Download the graphical
+desktop now? [Y/n]") because of the few hundred MB; a task or other run with no terminal does not download anything and
+says so. The desktop keeps running until the app is closed or Ubuntu is reinstalled. It is not shown inside a VS Code
+tab yet; the page opens in the browser.
 
 ## Opening a dev server
 
@@ -54,24 +57,28 @@ already answering is ignored. `VSCODROID_NO_PREVIEW=1` turns it off; `xdg-open
 
 ## Intel (x86_64) programs - experimental
 
-`ubuntu x86 setup` (once) installs qemu and unpacks an amd64 Ubuntu Base into `~/proot/ubuntu-amd64`.
-`ubuntu x86 run ./prog args` runs an Intel Linux program through qemu-user with the amd64 libraries
-mounted at `/opt/amd64`. Slow; prebuilt programs only.
+Starting an Intel Linux program (`./prog`, recognised by the processor field of its ELF header) installs qemu and unpacks
+an amd64 Ubuntu Base into `~/proot/ubuntu-amd64` the first time, with a notice, and runs the program through qemu-user
+with the amd64 libraries mounted at `/opt/amd64`. Slow; prebuilt programs only; only programs that get a `./name`
+function (see Built programs) are routed.
 
 ## Repair and reinstall
 
-`ubuntu repair` runs a check (can proot start Ubuntu, does `dpkg --audit` report nothing) and reinstalls only if it
-fails. `ubuntu reset` reinstalls after the question "Proceed? [Y/n]" (`--yes` skips it). Only the folders
-`~/proot/ubuntu` and `~/proot/ubuntu-amd64` in private storage are removed; the command refuses any other path, and
-anything under `/storage`, `/sdcard` or `/mnt`. Links inside Ubuntu are removed, never followed. The Command Palette entry
-**VSCodroid: Reinstall Linux Environment** (saf-bridge 1.12.0) opens a terminal and runs `ubuntu reset`.
+Ordinary damage repairs itself and removes nothing: an interrupted Ubuntu install is redone, and a half-configured
+package set (`dpkg --audit` not empty) is finished with `dpkg --configure -a` before the next `apt`/`dpkg` run (and
+once more after a failed `apt-get` of the app's own). The only destructive action is the Command Palette entry
+**VSCodroid: Reinstall Linux Environment** (saf-bridge 1.12.0), which opens a terminal that calls the reinstall
+function directly, asks "Proceed? [Y/n]", and waits for Enter at the end. Only the folders `~/proot/ubuntu` and
+`~/proot/ubuntu-amd64` in private storage are removed; any other path is refused, and so is anything under `/storage`,
+`/sdcard` or `/mnt`. Links inside Ubuntu are removed, never followed.
 
 ## Git inside Ubuntu
 
 Installed once, in the background, the first time Ubuntu is ready (git, ca-certificates, openssh-client). Settings and
 sign-in live in `~/.vscodroid/ubuntu-git` (shown in Ubuntu as `/root/.vscodroid-git`), so a reset keeps them. The helper
-is git's own `store`, pointed at that private file. `ubuntu git-login | git-logout | git-check` manage it. All package
-installs (first use of a tool, the Git setup, `ubuntu gui`, your own `apt`) take turns through one lock, because dpkg
+is git's own `store`, pointed at that private file: Git asks for the username and token itself when it needs them, and
+`git credential reject` removes them. The folder and file modes are kept at 700 and 600 automatically. All package
+installs (first use of a tool, the Git setup, the desktop, your own `apt`) take turns through one lock, because dpkg
 allows one at a time. The phone's `git` refuses remote addresses that carry a token (`VSCODROID_NO_TOKEN_GUARD=1` turns
 that off).
 
@@ -79,27 +86,33 @@ that off).
 
 A foreground command typed in the terminal runs under a guest shell with job control, so it has its own process group
 and the terminal; Ctrl+C reaches that command and not proot. Programs with their own interrupt handling run it;
-`ubuntu` at its prompt only cancels the line. Off with `VSCODROID_UB_NO_JOB=1`. `--kill-on-exit` still ends everything
+an Ubuntu shell (`sudo -i`) at its prompt only cancels the line. Off with `VSCODROID_UB_NO_JOB=1`. `--kill-on-exit` still ends everything
 when proot ends. A program just built (`gcc ... -o name`, `rustc`, `make`) can be started as `name` by its path as typed,
 by its absolute path (Code Runner does this), or as `./name`; a bare name is never defined.
 
 ## Tasks and extensions
 
 `type: shell` tasks and Code Runner (set to run in the terminal) run commands through the routing. `type: process` tasks
-that name `gcc` directly cannot work (see ANDROID_LIMITATION_LOG section 5).
+(and a `make` recipe, which runs under `/system/bin/sh`) that name `gcc`, `g++`, `cc`, `c++`, `cpp`, `cmake`, `cargo`,
+`rustc`, `go` or `gofmt` reach the routing through a launcher the app writes for each name (`ToolchainManager.addUbuntuRows`,
+using the existing exec trampoline). The arguments are passed one by one, the exit status is the command's own, and a
+toolchain that ships its own `go` or `cargo` keeps the name. `make`, `python` and `pip` are not given a launcher: the
+phone has its own, and a program that starts them by name gets those. Status: written and checked with a stand-in launcher
+in the sandbox; the Kotlin is not compiled here and nothing is run on a phone yet.
 
-## Errors from shared storage, and `ubuntu doctor`
+## Errors from shared storage
 
 When `cp`, `mv`, `tar`, `ln`, `chmod`, `chown`, `chgrp`, `mkfifo` or `mknod` fails in shared storage because the storage
 cannot do that, the tool's own error is shown unchanged and one line names the limit. Nothing is added for other errors,
-and `VSCODROID_NO_FS_NOTES=1` turns it off. `ubuntu doctor` (read-only) shows whether proot starts Ubuntu, whether packages
-are consistent, whether Ubuntu's package server is reachable, free space, what the current folder supports (links,
-permission bits, pipes, running programs) and which tools exist inside Ubuntu (`java`, `javac`, `gcc`, `g++`, `clangd`,
-`git`) with the `apt` command that installs a missing one.
+and `VSCODROID_NO_FS_NOTES=1` turns it off. There is no `ubuntu doctor` command: a user needs no diagnostic command to use
+the tools. The checks (proot present, Ubuntu present and startable, packages consistent, free space, what the folder
+supports) are an internal function that the install path runs after a failure; it writes `~/.vscodroid/ubuntu.log`, and the
+automated test calls it. The old description of `doctor` also listed a network check and a tool inventory (`java`, `clangd`
+...); those are not provided any more.
 
 ## Reset path validation and the Git guard (2026-10-19)
 
-`ubuntu reset` and `repair` act only on a folder they recognise as the app's own Ubuntu (see STORAGE_MAP.md) and otherwise
-stop with the reason. The `git` inside Ubuntu is `/usr/local/bin/git`, written from `git-token-guard.sh`, the same file the
+The reinstall acts only on a folder it recognises as the app's own Ubuntu (see STORAGE_MAP.md) and otherwise
+stops with the reason; the same test guards the clean-up of an interrupted install. The `git` inside Ubuntu is `/usr/local/bin/git`, written from `git-token-guard.sh`, the same file the
 phone's `git` uses: it refuses remote addresses that carry a password or token, hides stored ones in output, and the typed
-line is dropped from history. `ubuntu git-check` shows the sign-in file's modes and repairs them.
+line is dropped from history. The sign-in file's modes are corrected each time Ubuntu's Git is configured.

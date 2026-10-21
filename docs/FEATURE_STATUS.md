@@ -12,13 +12,13 @@ Updated 2026-10-15. "Tested" says where. Nothing marked "pending" has been run o
 | proot with Ubuntu 24.04, `gcc hello.c` | Built | Owner's Android 13 phone: PASS, glibc 2.39 |
 | Routing of gcc, g++, make, cmake, python, pip, cargo, rustc, go, apt, sudo into Ubuntu; `./program` | Built | Sandbox with a stand-in for proot; phone run pending |
 | Browser opens after `npm start`, `python -m http.server`, `runserver` | Built | Sandbox with real servers; the Android intent is pending a phone run |
-| `ubuntu gui` (Tkinter/Pygame screen in the browser) | Built, experimental | Start/stop logic only; the real desktop pending |
-| `ubuntu repair` / `ubuntu reset`, Command Palette "Reinstall Linux Environment" | Built | Sandbox (projects kept, refusals, cancel, repair); phone run pending |
-| Git installed in Ubuntu in the background; private sign-in (`ubuntu git-login`), token guard | Built | Sandbox with real git (stored file, mode 600, guard cases); phone run pending |
+| Graphical programs (Tkinter/Pygame screen in the browser), started automatically by a Python program that imports them | Built, experimental | Detection and the no-terminal case checked in the sandbox; the real desktop pending a phone |
+| Automatic first-use install and clean-up of an interrupted one; automatic `dpkg --configure -a`; Command Palette "Reinstall Linux Environment" (runs the reinstall directly) | Built | Sandbox (projects kept, refusals, cancel, repair); phone run pending |
+| Git installed in Ubuntu in the background; private sign-in (Git's own prompt and `store` helper), token guard | Built | Sandbox with real git (stored file, mode 600, guard cases); phone run pending |
 | Ctrl+C reaches the running command (Ubuntu and phone side); shell stays usable; watcher stops | Built | Real pty in a sandbox with stand-ins; extra-key-row Ctrl unchanged; phone run pending (C1-C7) |
 | `type: shell` tasks, Code Runner (terminal mode), NPM Scripts through the routing | Built | Sandbox: compile, run by absolute path, error and exit code; real extensions pending (B1-B7) |
-| `type: process` tasks that name a compiler directly | Not supported | Android blocks a program file in app storage; use shell tasks |
-| Accurate storage-limit line for failed cp/mv/tar/ln/chmod/chown/mkfifo/mknod; `ubuntu doctor` | Built | Sandbox with stand-ins; phone run pending (S1-S7, X1) |
+| `type: process` tasks that name `gcc`, `g++`, `cc`, `c++`, `cpp`, `cmake`, `cargo`, `rustc`, `go`, `gofmt` | Written, NOT run on a phone, Kotlin not compiled | Launcher rows through the exec trampoline; launcher checked in the sandbox |
+| Accurate storage-limit line for failed cp/mv/tar/ln/chmod/chown/mkfifo/mknod | Built | Sandbox with stand-ins; phone run pending (S1-S7, X1) |
 | `apt install default-jdk` and other packages through Ubuntu's own `apt` | Built (routing existed) | Not run; phone run pending (J1-J3) |
 | Java extensions | Depend on a phone-side JDK | Not verified (J4-J5) |
 | C/C++ IntelliSense (Microsoft C/C++, clangd) | Not supported | See EXTENSION_COMPATIBILITY.md |
@@ -28,7 +28,7 @@ Updated 2026-10-15. "Tested" says where. Nothing marked "pending" has been run o
 | Public Workspace spelled `VSCodroid`, an existing `vscodroid` kept | Built (Kotlin not compiled) | Not run; phone run pending (W1-W4) |
 | Git sign-in encryption | Not built, not claimed | Plain file in private storage |
 | Hiding project files from phone-wide search | **Not solved** | A dot-folder was tried and removed; `.nomedia` covers the media scanner only |
-| Intel (x86_64) programs: `ubuntu x86 setup`, `ubuntu x86 run ./prog` (qemu-user inside Ubuntu, amd64 libraries unpacked beside it) | Built, experimental | Setup and run commands checked in the sandbox with stand-ins; real emulation pending a phone run. Slow by nature; prebuilt binaries only |
+| Intel (x86_64) programs started as `./prog` (set up on first use; qemu-user inside Ubuntu, amd64 libraries unpacked beside it) | Built, experimental | Detection, first-use setup and the qemu call checked in the sandbox with stand-ins; real emulation pending a phone run. Slow by nature; prebuilt binaries only |
 | USB / Arduino flashing | Not built | Needs an Android USB service and a serial-over-TCP bridge |
 | Docker / containers | Not built | Not possible in the usual sense on a phone without root; udocker is research |
 | CI fixes from the 2026-10-13 report (attribution, unit tests, libandroid-shmem) | Applied | Pending a green build |

@@ -47,8 +47,8 @@ GitHub. GitHub's current token guidance should be re-read before release.
 ## 4. Keeping tokens out of project files
 
 `git remote add|set-url`, `clone`, `fetch`, `pull`, `push` refuse an address with `user:password@` or a GitHub token
-prefix. `ubuntu git-login` reads the token hidden and passes it on standard input. Ubuntu's own `git` inside the Ubuntu
-shell is not guarded; `ubuntu git-check` warns about a token already in `.git/config`.
+prefix. Ubuntu's Git asks for the token itself, hidden, and keeps it in its private `store` file. The `git` written into Ubuntu goes
+through the same guard; the internal check that warns about a token already in `.git/config` is no longer a terminal command.
 
 ## 5. Build tasks and extensions (tasks.json, Code Runner, NPM Scripts)
 
@@ -57,11 +57,11 @@ shell is not guarded; `ubuntu git-check` warns about a token already in `.git/co
 | Question | Finding |
 |----------|---------|
 | `type: shell` tasks | VS Code runs them as `bash -c "<command>"` in the terminal. `$BASH_ENV` is read by that shell, so the routing functions (gcc, python, cargo ...) exist and the command runs in Ubuntu. Working directory, environment and exit code come through; a compile error returns a normal error text and exit code 1 (checked in a sandbox, so problem matchers see what they expect) |
-| `type: process` tasks, and extensions that start a compiler directly (for example a C/C++ extension's own build task) | **Not supported, with a reason.** They look for a program file named `gcc`. Android's SELinux policy does not allow starting a file kept in app storage (the reason the commands are shell functions in the first place), so a `gcc` file on PATH cannot be made. A native launcher in the app could do it; that is app code that cannot be built or tested here. Use a shell task instead |
+| `type: process` tasks, and extensions that start a compiler directly (for example a C/C++ extension's own build task) | **Routed, not yet run on a phone.** They look for a program file named `gcc`, and Android's SELinux policy does not allow starting a file kept in app storage. The app already ships a real launcher in `nativeLibraryDir` (the exec trampoline, which reads `toolchain-exec.tsv`). `ToolchainManager.addUbuntuRows` now gives `gcc`, `g++`, `cc`, `c++`, `cpp`, `cmake`, `cargo`, `rustc`, `go` and `gofmt` a row each, run by `/system/bin/sh` with a generated script that sources `command-wrapper.sh` in bash and calls the command with `"$@"`. Limits: the Kotlin was not compiled here; `make`, `python` and `pip` keep the phone's own program for such callers; an absolute path (`/usr/bin/gcc`) is not a PATH lookup and never reaches it |
 | Code Runner | Its default shows output in the Output panel through a shell that is not ours, so routed commands would not be found. The app now ships `code-runner.runInTerminal: true`, which makes it use the integrated terminal, where they exist. It starts a program built from a C file by its **absolute path**; after a compile the app now defines that path (and `./name`) so it runs in Ubuntu |
 | NPM Scripts | VS Code's npm tasks are shell tasks; `npm` already works. Unchanged |
 | Result | Written; sandbox-tested with stand-ins for proot and the editor. **Not run with the real extensions on a phone** |
-| Remaining limits | `type: process` tasks; paths with spaces or odd characters get no program name defined (use `ubuntu ./prog`); the Code Runner behaviour above is from its documented setting, not run here |
+| Remaining limits | `type: process` tasks are written but not run on a phone; paths with spaces or odd characters get no `./name` function defined; the Code Runner behaviour above is from its documented setting, not run here |
 
 ## 6. Ctrl+C
 
@@ -117,7 +117,7 @@ shell is not guarded; `ubuntu git-check` warns about a token already in `.git/co
 | Read-only folders | `chmod -R` could follow links into a project | `find -type d` (does not follow links) | Sandbox |
 | Git guard | Only the phone's `git`; skipped when `-C` or `-c` came first; nothing inside Ubuntu; stored tokens printed by `remote -v` and `config`; the typed line stayed in history | One shared guard file used by the phone and by a `git` wrapper written into Ubuntu; global options skipped; output masked; the history line dropped | Real git, temporary repositories, 25 cases; the Ubuntu wrapper run directly (not inside proot) |
 | Logout | Left an empty credentials file | Removed when nothing is left | Sandbox |
-| Token file modes | Not verified | Created with umask 077; `ubuntu git-check` shows and repairs modes | Sandbox |
+| Token file modes | Not verified | Created with umask 077; modes corrected whenever Ubuntu's Git is configured | Sandbox |
 | Workspace spelling | Code used `vscodroid`; the designated path is `VSCodroid` | `VSCodroid`; an existing `vscodroid` folder is kept, never duplicated or moved | Code only; Kotlin not compiled, not run |
 | Docs | 10 references and one manifest comment used the lower-case spelling; no single description of what lives where | Corrected; STORAGE_MAP.md added | Docs checks |
 

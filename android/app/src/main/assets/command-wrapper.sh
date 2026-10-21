@@ -491,7 +491,7 @@ __vscodroid_fs_explain() {
     case "$op" in
       symlink)  what="symbolic links"; hint="Keep what needs them in a folder outside shared storage, such as ~ in Ubuntu." ;;
       hardlink) what="hard links"; hint="A copy can stand in for one." ;;
-      chmod)    what="changing permission bits or owners"; hint="Files there cannot be made executable; run a script with 'bash script.sh' or a program with 'ubuntu ./prog'." ;;
+      chmod)    what="changing permission bits or owners"; hint="Files there cannot be made executable; run a script with 'bash script.sh'. A program built there starts with ./name as usual." ;;
       fifo)     what="pipes and device files"; hint="Create them in a folder outside shared storage." ;;
     esac
     echo "vscodroid: Android public storage does not support $what ($d). The error above comes from that limit, not from the command. $hint" >&2

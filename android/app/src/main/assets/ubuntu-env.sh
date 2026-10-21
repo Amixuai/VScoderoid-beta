@@ -6,19 +6,23 @@
 # through proot. The current folder is passed through at the same path, so what
 # a command writes lands in your visible workspace.
 #
-# Not routed: node and npm (they run natively), git and the editor itself.
+# Nothing here has to be typed by the user. The first use of a tool installs the
+# Ubuntu system by itself; an interrupted install is cleaned up and redone; a
+# half-finished package install is completed before the next apt/dpkg run; a
+# program built in the workspace starts with ./name; a Python program that
+# imports Tkinter or Pygame gets the graphical desktop; an Intel (x86_64) program
+# is run through qemu. Not routed: node and npm (they run natively), git and the
+# editor itself.
 #
-# Opt out for one command:      VSCODROID_NO_UBUNTU=1 python3 script.py
-#                               native python3 script.py
-# Open an Ubuntu shell:         ubuntu
-# Install Ubuntu (once):        ubuntu setup
-# Repair / reinstall Ubuntu:    ubuntu repair | ubuntu reset   (your projects are never touched)
-# Git sign-in for Ubuntu's git: ubuntu git-login | ubuntu git-logout | ubuntu git-check
+# Standard ways to step outside the routing:  `command gcc ...` runs the phone's own
+# gcc if there is one; `sudo -i` opens a shell inside Ubuntu.
+# The one destructive action, reinstalling Ubuntu, is the Command Palette entry
+# "VSCodroid: Reinstall Linux Environment"; it asks before it removes anything.
 #
 # Android will not start a program that is stored in shared storage (the
 # workspace). So that `./hello` works after `gcc hello.c -o hello` as on a PC,
 # a function named ./hello is defined for each program built there; it runs a
-# private copy inside Ubuntu. `ubuntu ./hello` does the same explicitly.
+# private copy inside Ubuntu.
 
 [ "${VSCODROID_PLATFORM-}" = "android" ] || return 0
 declare -F __vscodroid_ub_loaded >/dev/null 2>&1 && return 0
@@ -31,7 +35,15 @@ __vscodroid_ub_git_dir() { printf '%s' "$HOME/.vscodroid/ubuntu-git"; }
 __vscodroid_ub_ready() {
   local r; r=$(__vscodroid_ub_root)
   [ -n "${VSCODROID_PROOT-}" ] && [ -x "${VSCODROID_PROOT-}" ] && [ -x "${PROOT_LOADER-}" ] &&
+    [ ! -e "$r/.vscodroid-installing" ] &&
     { [ -e "$r/bin/sh" ] || [ -L "$r/bin/sh" ]; }
+}
+
+# Developer log, never shown in the normal terminal flow.
+__vscodroid_ub_log() {
+  mkdir -p "$HOME/.vscodroid" 2>/dev/null
+  printf '%s %s\n' "$(date '+%F %T' 2>/dev/null)" "$*" >> "$HOME/.vscodroid/ubuntu.log" 2>/dev/null
+  return 0
 }
 
 # Runs a command inside Ubuntu, in the current folder.
@@ -57,7 +69,7 @@ __vscodroid_ub_exec() {
   envv+=("PATH=$gpath")
   [ -f "$gitdir/gitconfig" ] && envv+=(GIT_CONFIG_GLOBAL=/root/.vscodroid-git/gitconfig)
   [ -n "${VSCODROID_NO_TOKEN_GUARD-}" ] && envv+=(VSCODROID_NO_TOKEN_GUARD=1)
-  # While the graphical desktop runs (ubuntu gui start), programs draw on it.
+  # While the graphical desktop runs, programs draw on it.
   if [ -f "$HOME/.vscodroid/gui.pid" ] && kill -0 "$(cat "$HOME/.vscodroid/gui.pid" 2>/dev/null)" 2>/dev/null; then
     envv+=(DISPLAY=:1)
   fi
@@ -104,7 +116,7 @@ __vscodroid_ub_fg() { VSCODROID_UB_FG=1 __vscodroid_ub_exec "$@"; }
 
 # ---- one package install at a time ------------------------------------------------
 # Several things install packages: the first use of a tool, the Git setup that runs
-# in the background, `ubuntu gui`, and the user's own apt. dpkg allows one at a time,
+# in the background, the graphical desktop, and the user's own apt. dpkg allows one at a time,
 # so ours take a lock folder and wait their turn; a lock whose owner is gone is cleared.
 __vscodroid_ub_lock() {
   local d="$HOME/.vscodroid/ubuntu.lock.d" waited=0 pid
@@ -118,12 +130,80 @@ __vscodroid_ub_lock() {
   echo "${BASHPID:-$$}" > "$d/pid"
 }
 __vscodroid_ub_unlock() { rm -rf "$HOME/.vscodroid/ubuntu.lock.d"; }
+# An install that was killed half-way leaves dpkg with packages that are unpacked but
+# not configured. Ubuntu's own remedy, `dpkg --configure -a`, finishes them and removes
+# nothing. A damaged state that remains afterwards is left for apt to report in its
+# own words.
+__vscodroid_ub_heal() {
+  [ -n "$(__vscodroid_ub_exec dpkg --audit 2>/dev/null)" ] || return 0
+  echo "vscodroid: finishing a package installation that was interrupted..." >&2
+  __vscodroid_ub_log "dpkg --audit not clean; running dpkg --configure -a"
+  __vscodroid_ub_exec dpkg --configure -a >&2
+  __vscodroid_ub_exec apt-get -f install -y -qq >/dev/null 2>&1
+  return 0
+}
+
 __vscodroid_ub_apt() {
   local st
   __vscodroid_ub_lock || { echo "vscodroid: another package install is still running" >&2; return 1; }
   __vscodroid_ub_exec apt-get "$@"; st=$?
+  if [ $st -ne 0 ] && [ -n "$(__vscodroid_ub_exec dpkg --audit 2>/dev/null)" ]; then
+    __vscodroid_ub_heal
+    __vscodroid_ub_exec apt-get "$@"; st=$?
+  fi
   __vscodroid_ub_unlock
   return $st
+}
+
+# ---- first use: the Ubuntu system installs itself ------------------------------------
+# A half-unpacked folder from an interrupted install carries the installer's
+# "installing" marker. It is removed only when it is positively the app's own folder
+# (same tests as a reinstall); anything else is left alone and the install stops.
+__vscodroid_ub_clear_partial() {
+  local root; root=$(__vscodroid_ub_root)
+  [ -e "$root/.vscodroid-installing" ] && [ ! -L "$root/.vscodroid-installing" ] || return 0
+  __vscodroid_ub_is_ours "$root" ubuntu >/dev/null 2>&1 || return 0
+  find "$root" -type d -exec chmod u+rwx {} + 2>/dev/null
+  rm -rf "$root"
+}
+
+# Free space, in KB, where the Ubuntu system is kept.
+__vscodroid_ub_free_kb() { df -Pk "$HOME" 2>/dev/null | awk 'NR==2{print $4}'; }
+
+__vscodroid_ub_autosetup() {
+  local need free st
+  if [ -z "${VSCODROID_PROOT-}" ] || [ ! -x "${VSCODROID_PROOT-}" ]; then
+    echo "vscodroid: this build has no proot, so Linux tools are not available here" >&2
+    return 1
+  fi
+  need=${VSCODROID_UB_MIN_KB:-1500000}
+  free=$(__vscodroid_ub_free_kb)
+  case "$free" in
+    ''|*[!0-9]*) ;;
+    *) if [ "$free" -lt "$need" ]; then
+         echo "vscodroid: not enough free storage to install the Linux system (about $((need / 1024)) MB needed, $((free / 1024)) MB free)" >&2
+         return 1
+       fi ;;
+  esac
+  __vscodroid_ub_lock || { echo "vscodroid: the Linux system is still being installed from another terminal" >&2; return 1; }
+  # Another terminal may have finished it while this one waited for the lock.
+  if __vscodroid_ub_ready; then __vscodroid_ub_unlock; return 0; fi
+  __vscodroid_ub_clear_partial
+  echo "vscodroid: first use of a Linux tool: installing the Ubuntu system into the app's private storage (a few minutes, once)." >&2
+  __vscodroid_ub_log "installing Ubuntu"
+  bash "$HOME/.vscodroid/proot-test.sh" ubuntu; st=$?
+  __vscodroid_ub_unlock
+  # The script also compiles a test program; if only that step failed, the system is
+  # unpacked and usable, and the command about to run reports the real problem itself.
+  [ $st -eq 0 ] || __vscodroid_ub_log "install script ended with status $st"
+  if ! __vscodroid_ub_ready; then
+    __vscodroid_ub_log "install failed (status $st)"
+    __vscodroid_ub_selfcheck >/dev/null 2>&1
+    echo "vscodroid: the Linux system could not be installed (is the phone online? is there enough storage?). Nothing else was changed; it is tried again the next time a Linux tool is used." >&2
+    return 1
+  fi
+  __vscodroid_ub_log "install finished"
+  return 0
 }
 
 # command -> "group packages...": installed the first time the command is used.
@@ -183,8 +263,7 @@ __vscodroid_ub_cmd() {
   if [ -n "${VSCODROID_NO_UBUNTU-}" ]; then "__vscodroid_ub_orig_$n" "$@"; return $?; fi
   if ! __vscodroid_ub_ready; then
     if [ "${__vscodroid_ub_nat[$n]-0}" = 1 ]; then "__vscodroid_ub_orig_$n" "$@"; return $?; fi
-    echo "vscodroid: '$n' runs inside the Ubuntu system, which is not installed yet. Run:  ubuntu setup" >&2
-    return 127
+    __vscodroid_ub_autosetup || return 1
   fi
   __vscodroid_ub_git_bg
   if ! __vscodroid_ub_provision "$n"; then
@@ -197,11 +276,14 @@ __vscodroid_ub_cmd() {
       if [ "${1-}" = "-m" ] && [ "${2-}" = "venv" ]; then
         __vscodroid_ub_venv "$@"; st=$?
         [ $st -ne 2 ] && return $st
-      fi ;;
+      fi
+      # A program that draws a window (Tkinter, Pygame ...) gets the virtual screen.
+      __vscodroid_ub_wants_gui "$@" && __vscodroid_ub_gui_ensure ;;
   esac
   case "$n" in
     apt|apt-get|dpkg)
       __vscodroid_ub_lock || { echo "vscodroid: another package install is still running" >&2; return 1; }
+      __vscodroid_ub_heal
       __vscodroid_ub_fg "$n" "$@"; st=$?
       __vscodroid_ub_unlock
       return $st ;;
@@ -233,6 +315,13 @@ __vscodroid_ub_is_elf() {
   [ -f "$1" ] && [ "$(LC_ALL=C head -c4 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = 7f454c46 ]
 }
 
+# Which processor an ELF file is for: x86_64, aarch64 or other (e_machine, bytes 18-19).
+__vscodroid_ub_elf_arch() {
+  local m
+  m=$(LC_ALL=C dd if="$1" bs=1 skip=18 count=2 2>/dev/null | od -An -tx1 | tr -d ' \n')
+  case "$m" in 3e00) echo x86_64 ;; b700) echo aarch64 ;; *) echo other ;; esac
+}
+
 # Run a file stored in shared storage through a private copy inside Ubuntu.
 # Anything else is left to the system, which says what it always says.
 __vscodroid_ub_run_file() {
@@ -244,6 +333,9 @@ __vscodroid_ub_run_file() {
   esac
   if [ ! -f "$abs" ] || ! __vscodroid_ub_ready || ! __vscodroid_ub_on_shared "$abs"; then
     command "$p" "$@"; return $?
+  fi
+  if __vscodroid_ub_is_elf "$abs" && [ "$(__vscodroid_ub_elf_arch "$abs")" = x86_64 ]; then
+    __vscodroid_ub_x86_run "$abs" "$@"; return $?
   fi
   name=${abs##*/}
   id=$(printf '%s' "$abs" | cksum | cut -d' ' -f1)
@@ -311,12 +403,40 @@ esac
 # noVNC shows that screen in a browser page on this phone (localhost:6080).
 # EXPERIMENTAL: needs a few hundred MB the first time.
 #
-#   ubuntu gui start    start the desktop and open it in the browser
-#   ubuntu gui open     open the page again
-#   ubuntu gui stop     stop it
-#   ubuntu gui status
-#
-# While it runs, routed commands such as `python3 game.py` draw on it.
+# Nothing is typed to start it. Running a Python program that imports tkinter,
+# pygame, turtle, pyglet or kivy starts the desktop (after one question, the first
+# time, because of the download) and opens it in the browser; the program then draws
+# on it. The desktop keeps running until the app is closed or Ubuntu is reinstalled.
+__vscodroid_ub_wants_gui() {
+  local a f=""
+  for a in "$@"; do
+    case "$a" in -*) continue ;; *.py) f=$a; break ;; *) break ;; esac
+  done
+  [ -n "$f" ] && [ -f "$f" ] || return 1
+  head -c 65536 "$f" 2>/dev/null |
+    grep -Eq '^[[:space:]]*(import|from)[[:space:]]+(tkinter|Tkinter|pygame|turtle|pyglet|kivy)([[:space:].]|$)'
+}
+
+__vscodroid_ub_gui_ensure() {
+  local root marker pid ans tty
+  root=$(__vscodroid_ub_root)
+  pid=$(cat "$HOME/.vscodroid/gui.pid" 2>/dev/null)
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then return 0; fi
+  marker="$root/var/lib/vscodroid/provisioned/gui"
+  if [ ! -f "$marker" ]; then
+    tty=${VSCODROID_UB_TTY:-/dev/tty}
+    if [ ! -r "$tty" ] || { [ -z "${VSCODROID_UB_TTY-}" ] && [ ! -t 0 ]; }; then
+      echo "vscodroid: this program opens a window, which needs the graphical desktop (a one-time download of a few hundred MB). Run the program once from a terminal to install it." >&2
+      return 0
+    fi
+    printf '%s ' "This program opens a window. Download the graphical desktop now (a few hundred MB, once)? [Y/n]" >&2
+    read -r ans < "$tty"
+    case "$ans" in ""|y|Y|yes|YES|Yes) ;; *) echo "vscodroid: skipped; the program will run without a screen." >&2; return 0 ;; esac
+  fi
+  __vscodroid_ub_gui start
+  return 0
+}
+
 __vscodroid_ub_gui() {
   local act=${1-status} root pidf pid url marker
   root=$(__vscodroid_ub_root)
@@ -330,7 +450,7 @@ __vscodroid_ub_gui() {
       fi
       marker="$root/var/lib/vscodroid/provisioned/gui"
       if [ ! -f "$marker" ]; then
-        echo "vscodroid: first use of the graphical desktop: installing it into the Ubuntu system. This takes several minutes, once." >&2
+        echo "vscodroid: installing the graphical desktop into the Ubuntu system. This takes several minutes, once." >&2
         if ! { __vscodroid_ub_apt update -qq &&
                __vscodroid_ub_apt install -y -qq --no-install-recommends \
                  tigervnc-standalone-server novnc websockify openbox xterm x11-utils python3-tk; }; then
@@ -348,16 +468,16 @@ __vscodroid_ub_gui() {
         echo $! > "$pidf"
       )
       sleep 4
-      if __vscodroid_open_url "$url"; then echo "vscodroid: the desktop is open in the browser"; else echo "vscodroid: the desktop is at $url"; fi
+      if __vscodroid_open_url "$url"; then echo "vscodroid: the desktop is open in the browser" >&2; else echo "vscodroid: the desktop is at $url" >&2; fi
       return 0 ;;
     open) __vscodroid_open_url "$url" || echo "$url"; return 0 ;;
     stop)
-      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null; rm -f "$pidf"; echo "vscodroid: the desktop is stopped"; else rm -f "$pidf"; echo "vscodroid: the desktop is not running"; fi
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null; rm -f "$pidf"; else rm -f "$pidf"; fi
       return 0 ;;
     status)
       if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "running ($url)"; else echo "not running"; fi
       return 0 ;;
-    *) echo "usage: ubuntu gui start|open|stop|status" >&2; return 2 ;;
+    *) return 2 ;;
   esac
 }
 
@@ -365,58 +485,55 @@ __vscodroid_ub_gui() {
 # qemu-user, installed inside the arm64 Ubuntu, runs an Intel Linux program and
 # answers its system calls itself; the Intel libraries come from an amd64 Ubuntu
 # unpacked beside the main one and shown at /opt/amd64. Slow by nature (an
-# emulated processor) and EXPERIMENTAL. For prebuilt Intel binaries; it does not
-# turn the whole system into an Intel one.
+# emulated processor) and EXPERIMENTAL. For prebuilt Intel binaries only; it does
+# not turn the whole system into an Intel one, and a program that is not found by
+# ./name (see __vscodroid_ub_scan) is not routed.
 #
-#   ubuntu x86 setup          install qemu and fetch the amd64 files (once)
-#   ubuntu x86 run ./prog ... run an Intel program
-__vscodroid_ub_x86() {
-  local act=${1-help} root x86root marker prog abs id dst
+# Nothing is typed to set it up: starting an Intel program prepares qemu and the
+# amd64 files the first time, with a notice.
+__vscodroid_ub_x86_ensure() {
+  local root x86root marker
   root=$(__vscodroid_ub_root)
   x86root="${root%/*}/ubuntu-amd64"
   marker="$root/var/lib/vscodroid/provisioned/qemu"
-  case "$act" in
-    setup)
-      if [ ! -f "$marker" ]; then
-        echo "vscodroid: installing qemu into the Ubuntu system (a few minutes, once)..." >&2
-        __vscodroid_ub_apt update -qq &&
-          __vscodroid_ub_apt install -y -qq --no-install-recommends qemu-user-static || {
-          echo "vscodroid: could not install qemu (is the phone online?)" >&2; return 1; }
-        mkdir -p "${marker%/*}" && : > "$marker"
-      fi
-      if [ ! -e "$x86root/lib64/ld-linux-x86-64.so.2" ] && [ ! -e "$x86root/usr/lib64/ld-linux-x86-64.so.2" ]; then
-        bash "$HOME/.vscodroid/proot-test.sh" ubuntu-amd64 || return 1
-      fi
-      echo "vscodroid: Intel programs are ready: ubuntu x86 run ./program"
-      return 0 ;;
-    run)
-      shift
-      [ $# -ge 1 ] || { echo "usage: ubuntu x86 run PROGRAM [ARGS]" >&2; return 2; }
-      if [ ! -f "$marker" ] || [ ! -d "$x86root/usr" ]; then
-        echo "vscodroid: run  ubuntu x86 setup  first" >&2; return 1
-      fi
-      prog=$1; shift
-      case "$prog" in
-        */*) abs="$(cd "${prog%/*}" 2>/dev/null && pwd -P)/${prog##*/}" ;;
-        *) abs="$(pwd -P)/$prog" ;;
-      esac
-      [ -f "$abs" ] || { echo "vscodroid: $prog: no such file" >&2; return 1; }
-      id=$(printf '%s' "$abs" | cksum | cut -d' ' -f1)
-      dst="$root/tmp/vsc-run/$id/${abs##*/}"
-      mkdir -p "${dst%/*}" && cp -f "$abs" "$dst" && chmod 755 "$dst" || return 1
-      VSCODROID_UB_EXTRA_BIND="$x86root:/opt/amd64" \
-        __vscodroid_ub_fg qemu-x86_64-static -L /opt/amd64 "/tmp/vsc-run/$id/${abs##*/}" "$@"
-      return $? ;;
-    *) echo "usage: ubuntu x86 setup | ubuntu x86 run PROGRAM [ARGS]" >&2; return 2 ;;
-  esac
+  if [ -f "$marker" ] && { [ -e "$x86root/lib64/ld-linux-x86-64.so.2" ] || [ -e "$x86root/usr/lib64/ld-linux-x86-64.so.2" ]; }; then
+    return 0
+  fi
+  echo "vscodroid: this is an Intel (x86_64) program; preparing the emulator for it (a few minutes, once)." >&2
+  if [ ! -f "$marker" ]; then
+    __vscodroid_ub_apt update -qq &&
+      __vscodroid_ub_apt install -y -qq --no-install-recommends qemu-user-static || {
+      echo "vscodroid: could not install qemu (is the phone online?)" >&2; return 1; }
+    mkdir -p "${marker%/*}" && : > "$marker"
+  fi
+  if [ ! -e "$x86root/lib64/ld-linux-x86-64.so.2" ] && [ ! -e "$x86root/usr/lib64/ld-linux-x86-64.so.2" ]; then
+    bash "$HOME/.vscodroid/proot-test.sh" ubuntu-amd64 >&2 || return 1
+  fi
+  return 0
 }
 
-# ---- repair / reinstall Ubuntu ----------------------------------------------------
-# `ubuntu reset` wipes the Ubuntu system (every package installed in it) and
-# installs it again. It removes only the Ubuntu folders inside the app's private
-# storage. Projects in shared storage are never touched, and neither are the Git
-# settings and sign-in (they live outside the Ubuntu system, see below).
-# `ubuntu repair` looks first, and only reinstalls if Ubuntu is damaged.
+# __vscodroid_ub_x86_run <absolute path of an Intel program> [args...]
+__vscodroid_ub_x86_run() {
+  local abs=$1 root x86root id dst
+  shift
+  __vscodroid_ub_x86_ensure || return 1
+  root=$(__vscodroid_ub_root)
+  x86root="${root%/*}/ubuntu-amd64"
+  id=$(printf '%s' "$abs" | cksum | cut -d' ' -f1)
+  dst="$root/tmp/vsc-run/$id/${abs##*/}"
+  mkdir -p "${dst%/*}" && cp -f "$abs" "$dst" && chmod 755 "$dst" || return 1
+  VSCODROID_UB_EXTRA_BIND="$x86root:/opt/amd64" \
+    __vscodroid_ub_fg qemu-x86_64-static -L /opt/amd64 "/tmp/vsc-run/$id/${abs##*/}" "$@"
+}
+
+# ---- reinstall Ubuntu ---------------------------------------------------------------
+# Reached only from the Command Palette ("VSCodroid: Reinstall Linux Environment"),
+# which opens a terminal that calls __vscodroid_ub_reset directly. It wipes the
+# Ubuntu system (every package installed in it) and installs it again. It removes
+# only the Ubuntu folders inside the app's private storage. Projects in shared storage
+# are never touched, and neither are the Git settings and sign-in (they live outside
+# the Ubuntu system, see below). Ordinary damage (an interrupted install, a half-
+# configured package) is repaired on its own and never needs this.
 #   --yes   skip the question (for scripts)
 __vscodroid_ub_setup() { bash "$HOME/.vscodroid/proot-test.sh" ubuntu; }
 
@@ -497,7 +614,7 @@ __vscodroid_ub_reset() {
   fi
 
   if [ "$mode" = repair ] && __vscodroid_ub_healthy; then
-    echo "vscodroid: Ubuntu looks healthy. To reinstall it anyway, run:  ubuntu reset"
+    echo "vscodroid: Ubuntu looks healthy. To reinstall it anyway, use the Command Palette entry \"VSCodroid: Reinstall Linux Environment\"."
     return 0
   fi
   if [ ! -e "$root" ] && [ ! -L "$root" ]; then
@@ -536,7 +653,7 @@ __vscodroid_ub_reset() {
     __vscodroid_ub_git_bg
     return 0
   fi
-  echo "vscodroid: the reinstall did not finish. Run  ubuntu reset  again when the phone is online." >&2
+  echo "vscodroid: the reinstall did not finish. Use \"VSCodroid: Reinstall Linux Environment\" again when the phone is online." >&2
   return 1
 }
 
@@ -551,6 +668,12 @@ __vscodroid_ub_reset() {
 #
 # The phone's own git (Source Control, the terminal's `git`) signs in through VS Code
 # and is unaffected by any of this.
+#
+# Ubuntu's git signs in the standard way: `git clone`/`git push` ask for a username and
+# a token, and the `store` helper above keeps them in the private file. They are removed
+# with the standard `git credential reject`. The three functions below
+# (__vscodroid_ub_git_login/logout/check) are no longer reachable from the terminal;
+# they stay for the automated tests.
 __vscodroid_ub_git_configure() {
   local d cfg name email
   d=$(__vscodroid_ub_git_dir); cfg="$d/gitconfig"
@@ -565,6 +688,8 @@ __vscodroid_ub_git_configure() {
   [ -z "$name" ]  || __vscodroid_orig_git config --file "$cfg" user.name "$name"
   [ -z "$email" ] || __vscodroid_orig_git config --file "$cfg" user.email "$email"
   chmod 600 "$cfg" 2>/dev/null
+  # Keep the sign-in file private whatever a restore or a copy did to its mode.
+  [ -f "$d/credentials" ] && chmod 600 "$d/credentials" 2>/dev/null
   return 0
 }
 
@@ -634,7 +759,7 @@ __vscodroid_ub_git_bg() {
   return 0
 }
 
-# ubuntu git-login [host]: the token is typed hidden and handed to git on its
+# git login [host]: the token is typed hidden and handed to git on its
 # standard input, so it never appears in a command line, shell history or a project.
 __vscodroid_ub_git_login() {
   local host=${1:-github.com} d user token
@@ -683,43 +808,47 @@ __vscodroid_ub_git_check() {
   fi
 }
 
-ubuntu() {
-  case "${1-}" in
-    setup) __vscodroid_ub_setup && __vscodroid_ub_git_bg; return $? ;;
-    reset|repair)
-      __vscodroid_ub_reset "$@"; return $? ;;
-    doctor) __vscodroid_ub_doctor; return $? ;;
-    git-login)  shift; __vscodroid_ub_git_login "$@"; return $? ;;
-    git-logout) shift; __vscodroid_ub_git_logout "$@"; return $? ;;
-    git-check)  __vscodroid_ub_git_check; return $? ;;
-    x86)
-      shift
-      if ! __vscodroid_ub_ready; then echo "vscodroid: the Ubuntu system is not installed yet. Run:  ubuntu setup" >&2; return 1; fi
-      __vscodroid_ub_x86 "$@"; return $? ;;
-    gui)
-      shift
-      if ! __vscodroid_ub_ready; then echo "vscodroid: the Ubuntu system is not installed yet. Run:  ubuntu setup" >&2; return 1; fi
-      __vscodroid_ub_gui "$@"; return $? ;;
-    help|-h|--help)
-      echo "ubuntu            open a shell inside the Ubuntu system"
-      echo "ubuntu CMD ...    run CMD there (ubuntu ./hello runs a built program)"
-      echo "ubuntu setup      install the Ubuntu system (once)"
-      echo "ubuntu repair     check Ubuntu and reinstall it only if it is damaged"
-      echo "ubuntu reset      wipe and reinstall Ubuntu (projects are not touched)"
-      echo "ubuntu doctor     read-only check: proot, packages, network, space, what this folder supports"
-      echo "ubuntu git-login  save a GitHub token for Ubuntu's git (typed hidden)"
-      echo "ubuntu git-logout / git-check"
-      echo "ubuntu gui start  graphical desktop for Tkinter/Pygame (experimental)"
-      echo "ubuntu x86 setup  run Intel (x86_64) programs through qemu (experimental)"
-      echo "native CMD ...    run CMD on the phone itself, not in Ubuntu"
-      return 0 ;;
-  esac
-  if ! __vscodroid_ub_ready; then
-    echo "vscodroid: the Ubuntu system is not installed yet. Run:  ubuntu setup" >&2
-    return 1
+# Read-only health check. It is not a command: the install path runs it after a failed
+# install, and the tests call it. The answers go to ~/.vscodroid/ubuntu.log; they are
+# printed only with VSCODROID_SELFCHECK_VERBOSE=1. Status 1 means something is wrong.
+__vscodroid_ub_chk() {
+  __vscodroid_ub_log "check $1: $2"
+  [ -z "${VSCODROID_SELFCHECK_VERBOSE-}" ] || echo "$1: $2"
+  [ "$2" = ok ] || __vscodroid_ub_chk_bad=1
+}
+
+__vscodroid_ub_selfcheck() {
+  local root op free
+  root=$(__vscodroid_ub_root); __vscodroid_ub_chk_bad=0
+  if [ -n "${VSCODROID_PROOT-}" ] && [ -x "${VSCODROID_PROOT-}" ]; then __vscodroid_ub_chk proot ok; else __vscodroid_ub_chk proot "missing"; fi
+  if [ -n "${PROOT_LOADER-}" ] && [ -x "${PROOT_LOADER-}" ]; then __vscodroid_ub_chk loader ok; else __vscodroid_ub_chk loader "missing"; fi
+  [ ! -e "$root/.vscodroid-installing" ] || __vscodroid_ub_chk installer "an install did not finish"
+  if __vscodroid_ub_ready; then
+    __vscodroid_ub_chk ubuntu ok
+    if __vscodroid_ub_exec /bin/true >/dev/null 2>&1; then __vscodroid_ub_chk start ok; else __vscodroid_ub_chk start "proot could not start a command"; fi
+    if [ -z "$(__vscodroid_ub_exec dpkg --audit 2>/dev/null)" ]; then __vscodroid_ub_chk packages ok; else __vscodroid_ub_chk packages "an installation was left unfinished"; fi
+  else
+    __vscodroid_ub_chk ubuntu "not installed"
   fi
+  free=$(__vscodroid_ub_free_kb)
+  case "$free" in ''|*[!0-9]*) ;; *) if [ "$free" -ge "${VSCODROID_UB_MIN_KB:-1500000}" ]; then __vscodroid_ub_chk storage ok; else __vscodroid_ub_chk storage "only $((free / 1024)) MB free"; fi ;; esac
+  # What this folder supports is information, not a fault.
+  if declare -F __vscodroid_op_works >/dev/null 2>&1; then
+    for op in symlink hardlink chmod fifo; do
+      if __vscodroid_op_works "$op" "$(pwd -P 2>/dev/null || pwd)"; then __vscodroid_ub_log "folder $op: supported"; else __vscodroid_ub_log "folder $op: not supported"; fi
+    done
+  fi
+  return $__vscodroid_ub_chk_bad
+}
+
+# A shell, or one command, inside the Ubuntu system. `ubuntu` and `sudo` both end here.
+__vscodroid_ub_run_cmd() {
+  if ! __vscodroid_ub_ready; then __vscodroid_ub_autosetup || return 1; fi
   __vscodroid_ub_git_bg
   if [ $# -eq 0 ]; then __vscodroid_ub_exec /bin/bash -l; return $?; fi
+  case "$1" in
+    apt|apt-get|dpkg) __vscodroid_ub_cmd "$@"; return $? ;;
+  esac
   case "$1" in
     */*) if [ -f "$1" ] && __vscodroid_ub_on_shared "$(cd "${1%/*}" 2>/dev/null && pwd -P)/${1##*/}"; then
            __vscodroid_ub_run_file "$@"; return $?
@@ -728,12 +857,26 @@ ubuntu() {
   __vscodroid_ub_fg "$@"
 }
 
+# Kept as a way in for people who know it; nothing documented or automatic needs it.
+ubuntu() { __vscodroid_ub_run_cmd "$@"; }
 native() { VSCODROID_NO_UBUNTU=1 "$@"; }
 
+# sudo as on a PC: the commands that need root run as (fake) root inside Ubuntu.
+# `sudo -i`, `sudo -s` and `sudo su` open a shell there.
 sudo() {
+  while :; do
+    case "${1-}" in
+      -E|-S|-n|-H|-A|-b|-k|-v|--preserve-env) shift ;;
+      -u|-g) shift; shift ;;
+      -u?*|-g?*|--user=*|--group=*|--preserve-env=*) shift ;;
+      -i|-s|--login|--shell) shift; [ $# -eq 0 ] && { __vscodroid_ub_run_cmd; return $?; }; break ;;
+      --) shift; break ;;
+      *) break ;;
+    esac
+  done
   if [ $# -eq 0 ]; then echo "usage: sudo COMMAND ..." >&2; return 1; fi
-  while [ "${1-}" = -E ] || [ "${1-}" = -S ]; do shift; done
-  ubuntu "$@"
+  if [ "$1" = su ] && { [ $# -eq 1 ] || [ "$2" = - ]; }; then __vscodroid_ub_run_cmd; return $?; fi
+  __vscodroid_ub_run_cmd "$@"
 }
 
 for __n in gcc g++ cc c++ cpp make cmake python python3 pip pip3 cargo rustc go gofmt apt apt-get apt-cache dpkg; do
@@ -742,11 +885,14 @@ for __n in gcc g++ cc c++ cpp make cmake python python3 pip pip3 cargo rustc go 
     __vscodroid_ub_nat[$__n]=1
   else
     eval "__vscodroid_ub_orig_$__n() { command $__n \"\$@\"; }"
-    command -v "$__n" >/dev/null 2>&1 && __vscodroid_ub_nat[$__n]=1 || __vscodroid_ub_nat[$__n]=0
+    # A launcher the app put on PATH for programs that start this command by name
+    # (usr/libexec/tcbin) leads back into this routing; it is not a native tool.
+    __p=$(command -v "$__n" 2>/dev/null)
+    case "$__p" in ''|*/usr/libexec/tcbin/*) __vscodroid_ub_nat[$__n]=0 ;; *) __vscodroid_ub_nat[$__n]=1 ;; esac
   fi
   eval "$__n() { __vscodroid_ub_cmd $__n \"\$@\"; }"
 done
-unset __n
+unset __n __p
 
 # ---- keep tokens out of project files -------------------------------------------
 # The phone's own `git` goes through the same guard as the git inside Ubuntu

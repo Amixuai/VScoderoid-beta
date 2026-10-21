@@ -4,8 +4,8 @@
 |---|---|
 | Hide projects from phone search | **Not solved.** A dot folder was tried and removed; `.nomedia` covers the media scanner only |
 | Open the browser for a dev server | Done and tested with real servers |
-| Graphical programs (Tkinter/Pygame) | Written, NOT tested on a phone (`ubuntu gui`) |
-| Intel (x86_64) programs | Built, experimental (`ubuntu x86`), not run on a phone |
+| Graphical programs (Tkinter/Pygame) | Written, NOT tested on a phone (starts automatically for Python programs that import tkinter, pygame ...) |
+| Intel (x86_64) programs | Built, experimental (automatic for `./prog` Intel programs), not run on a phone |
 | USB / Arduino flashing | Not built |
 | Docker / containers | Not built; likely only a narrow subset is possible |
 
@@ -23,8 +23,8 @@ a product decision.
 
 ## Intel programs
 
-`ubuntu x86 setup` installs `qemu-user-static` inside the arm64 Ubuntu and unpacks an amd64 Ubuntu Base
-beside it; `ubuntu x86 run ./prog` runs a prebuilt Intel Linux program through qemu with the amd64
+Starting an Intel program installs `qemu-user-static` inside the arm64 Ubuntu and unpacks an amd64 Ubuntu Base
+beside it (first time only); it then runs the prebuilt Intel Linux program through qemu with the amd64
 libraries at `/opt/amd64`. This needs no new binary in the app. It is an emulated processor, so it is
 slow, and it runs one program at a time; it does not make the shell an Intel one. Box64 is faster but
 is not offered as a ready download for Ubuntu arm64.
