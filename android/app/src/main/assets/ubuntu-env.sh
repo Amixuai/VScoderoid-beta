@@ -102,7 +102,8 @@ __vscodroid_ub_exec() {
   # command, as on a PC, and proot is not signalled. Background and piped calls, and
   # calls with no terminal, run as before. VSCODROID_UB_NO_JOB=1 turns this off.
   local -a run=("$@")
-  if [ -n "${VSCODROID_UB_FG-}" ] && [ -z "${VSCODROID_UB_NO_JOB-}" ] && [ -t 0 ] && [ "${BASHPID:-$$}" = "$$" ]; then
+  if [ -n "${VSCODROID_UB_FG-}" ] && [ -z "${VSCODROID_UB_NO_JOB-}" ] && [ -t 0 ] &&
+     { [ "${BASHPID:-$$}" = "$$" ] || [ -n "${VSCODROID_UB_SOLE_FG-}" ]; }; then
     run=(/bin/bash -c 'set -m; "$@"; exit $?' vscodroid-run "$@")
   fi
 
@@ -860,6 +861,30 @@ __vscodroid_ub_run_cmd() {
 # Kept as a way in for people who know it; nothing documented or automatic needs it.
 ubuntu() { __vscodroid_ub_run_cmd "$@"; }
 native() { VSCODROID_NO_UBUNTU=1 "$@"; }
+
+# Anything else installed in Ubuntu with apt (java, javac, clang, clangd, gdb, perl,
+# ruby ...) runs there when the phone has no program of that name: bash calls this
+# function for a command it cannot find. It never installs anything: a mistyped
+# name must not start a download, so it only looks, and only once Ubuntu exists.
+# The command's arguments, working directory, exit status and Ctrl+C behave as for the
+# routed names above. (`command -v NAME` and `which NAME` still report only what the
+# phone itself has; they do not run a command, so bash does not call this.)
+command_not_found_handle() {
+  local n=${1-}
+  shift
+  # A tool this lookup itself needs being missing must not send it round again.
+  if [ -n "${__vscodroid_ub_cnf-}" ]; then printf 'bash: %s: command not found\n' "$n" >&2; return 127; fi
+  local __vscodroid_ub_cnf=1
+  case "$n" in ''|*/*) ;; *)
+    if [ -z "${VSCODROID_NO_UBUNTU-}" ] && __vscodroid_ub_ready &&
+       __vscodroid_ub_exec /bin/sh -c 'command -v "$1" >/dev/null 2>&1' sh "$n" 2>/dev/null; then
+      VSCODROID_UB_SOLE_FG=1 __vscodroid_ub_fg "$n" "$@"
+      return $?
+    fi ;;
+  esac
+  printf 'bash: %s: command not found\n' "$n" >&2
+  return 127
+}
 
 # sudo as on a PC: the commands that need root run as (fake) root inside Ubuntu.
 # `sudo -i`, `sudo -s` and `sudo su` open a shell there.

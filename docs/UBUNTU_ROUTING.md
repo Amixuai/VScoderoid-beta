@@ -36,6 +36,12 @@ version of the command (python, make), the phone's version runs instead.
   test script), under the package lock, after checking free space. A folder left by an interrupted install is removed
   first, only if it is positively the app's own. If the download or the install fails, the message says so and it is
   tried again next time.
+- **Other tools.** Anything you install in Ubuntu with `apt` (`java`, `javac`, `clang`, `clangd`, `gdb`, `perl`, `ruby` ...) runs by
+  its own name when the phone has no program of that name: bash calls `command_not_found_handle`, which looks the name up
+  inside Ubuntu and, if it is there, runs it with the same arguments, folder, exit status and Ctrl+C behaviour. It never
+  installs anything, so a mistyped name starts no download, and with no Ubuntu yet it just says "command not found".
+  `command -v NAME` and `which NAME` report only what the phone has. A program started by a task or an extension without a shell
+  (the launcher rows below) does not get this.
 
 ## Graphical programs (Tkinter, Pygame) - experimental
 

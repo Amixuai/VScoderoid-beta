@@ -13,6 +13,7 @@ Updated 2026-10-15. "Tested" says where. Nothing marked "pending" has been run o
 | Routing of gcc, g++, make, cmake, python, pip, cargo, rustc, go, apt, sudo into Ubuntu; `./program` | Built | Sandbox with a stand-in for proot; phone run pending |
 | Browser opens after `npm start`, `python -m http.server`, `runserver` | Built | Sandbox with real servers; the Android intent is pending a phone run |
 | Graphical programs (Tkinter/Pygame screen in the browser), started automatically by a Python program that imports them | Built, experimental | Detection and the no-terminal case checked in the sandbox; the real desktop pending a phone |
+| Tools installed with `apt` and not routed by name (`java`, `javac`, `clang`, `gdb` ...) run by their own name in the terminal and shell tasks (not-found handler) | Built, sandbox-tested, NOT run on a phone |
 | Automatic first-use install and clean-up of an interrupted one; automatic `dpkg --configure -a`; Command Palette "Reinstall Linux Environment" (runs the reinstall directly) | Built | Sandbox (projects kept, refusals, cancel, repair); phone run pending |
 | Git installed in Ubuntu in the background; private sign-in (Git's own prompt and `store` helper), token guard | Built | Sandbox with real git (stored file, mode 600, guard cases); phone run pending |
 | Ctrl+C reaches the running command (Ubuntu and phone side); shell stays usable; watcher stops | Built | Real pty in a sandbox with stand-ins; extra-key-row Ctrl unchanged; phone run pending (C1-C7) |

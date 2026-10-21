@@ -87,6 +87,17 @@ rm -f "$ROOT/.vscodroid-installing"
 echo "$1" > "$ROOT/.vscodroid-ubuntu"
 exit 0
 EOF
+cat > "$T/guest/javac" <<'EOF'
+#!/bin/bash
+printf 'javac-arg:%s\n' "$@"
+echo "cwd:$PWD"
+exit "${FAKE_JAVAC_STATUS:-0}"
+EOF
+cat > "$T/guest/slowtool" <<'EOF'
+#!/bin/bash
+echo "SLOW-""RUNNING"
+exec sleep 64
+EOF
 cat > "$T/guest/apt" <<'EOF'
 #!/bin/bash
 echo "apt $*" >> "$APT_LOG"
@@ -270,6 +281,24 @@ VSCODROID_FS_PROBE=fail run 'cp a b 2>"$HOME/e.txt" | cat; echo "rc=${PIPESTATUS
 check "a redirect of stderr still gets the error" "$(contains "$H/e.txt" 'Operation not permitted'; echo $?)"
 check "no stray probe files are left behind" "$([ -z "$(ls -A "$WS" | grep vscodroid-op)" ]; echo $?)"
 
+echo "== 14. tools installed in Ubuntu run by their own name"
+newenv; ready_ubuntu
+FAKE_JAVAC_STATUS=4 run 'javac "My File.java" -d out; echo "rc=$?"'
+check "javac, which is not a routed name, ran in Ubuntu with its arguments" "$(contains "$T/out" 'javac-arg:My File.java' && contains "$T/out" 'javac-arg:-d'; echo $?)"
+check "in the same working folder" "$(contains "$T/out" "cwd:$WS"; echo $?)"
+check "and its exit status 4 came back" "$(contains "$T/out" 'rc=4'; echo $?)"
+run 'javac a.java | cat; javac b.java > "$HOME/j.txt"; echo done'
+check "pipes and redirects work for it" "$(contains "$T/out" 'javac-arg:a.java' && contains "$H/j.txt" 'javac-arg:b.java'; echo $?)"
+run 'nosuchtool x; echo "rc=$?"'
+check "a name that exists nowhere gives the usual message and 127" "$(contains "$T/err" 'nosuchtool: command not found' && contains "$T/out" 'rc=127'; echo $?)"
+run 'VSCODROID_NO_UBUNTU=1 javac x; echo "rc=$?"'
+check "VSCODROID_NO_UBUNTU keeps it on the phone (127)" "$(contains "$T/out" 'rc=127'; echo $?)"
+run 'command -v javac || echo phone-has-none'
+check "command -v reports only what the phone has" "$(contains "$T/out" 'phone-has-none'; echo $?)"
+newenv
+run 'javac x; echo "rc=$?"'
+check "with no Ubuntu yet a mistyped or unknown name downloads nothing" "$([ ! -s "$T/setup.log" ] && contains "$T/out" 'rc=127'; echo $?)"
+
 echo "== 13. Ctrl+C reaches only the running command (real pseudo-terminal, stand-in proot)"
 newenv; ready_ubuntu
 cat > "$T/ctrlc.py" <<'PY'
@@ -366,6 +395,18 @@ for _ in range(3):
     a.send(b"\x03"); time.sleep(0.2)
 a.send("true; echo MARK3-$?\n")
 check("repeated Ctrl+C at a prompt does no harm", a.read_until(r"MARK3-0"))
+
+# 3b. a tool that only Ubuntu has, found by the not-found handler
+a.buf = b""
+a.send("slowtool\n")
+check("a tool only Ubuntu has started by its own name", a.read_until("SLOW-RUNNING"))
+a.send(b"\x03")
+time.sleep(1.0)
+a.send("echo MARK4-$?\n")
+check("the shell is usable after Ctrl+C on it", a.read_until(r"MARK4-\d+"))
+m = re.search(rb"MARK4-(\d+)", a.buf)
+check("and the status says interrupted (130)", m and m.group(1) == b"130")
+check("that tool is gone too", not procs(b"sleep 64"))
 
 # 4. the other terminal was never touched
 check("another terminal's command was not stopped", bool(procs(b"time.sleep(63)")))
