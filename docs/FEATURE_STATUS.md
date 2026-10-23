@@ -8,7 +8,9 @@ Updated 2026-10-15. "Tested" says where. Nothing marked "pending" has been run o
 | `.nomedia` in the workspace root | Built | Not checked against phone search (see below) |
 | Old private folder no longer reopened after permission is granted | Built | Pending a phone run |
 | Open Folder opens Android's folder picker (menu, long-press, Explorer; command override plus WebView fallback) | Built | Pending a phone run |
-| Command wrapper: `npm install --no-bin-links`, venv moved to private storage, `ln` copy fallback, filesystem probe | Built | Shell logic tested in the sandbox; phone run pending |
+| Command wrapper: `npm install --no-bin-links`, `ln` copy fallback, filesystem probe | Built | Shell logic tested in the sandbox; phone run pending |
+| `python3 -m venv`: real environment where the folder can hold one; in shared storage the environment lives in Ubuntu (or private storage) with `bin/activate`, `python`, `python3`, `pip`, `pip3` usable in the terminal; every failure reported | Fixed in Update-14; sandbox-tested with real Python and pip | Phone run pending. A program that starts `.venv/bin/python` itself cannot |
+| Variables you export reach commands run in Ubuntu | Fixed in Update-14; sandbox-tested | Phone run pending |
 | proot with Ubuntu 24.04, `gcc hello.c` | Built | Owner's Android 13 phone: PASS, glibc 2.39 |
 | Routing of gcc, g++, make, cmake, python, pip, cargo, rustc, go, apt, sudo into Ubuntu; `./program` | Built | Sandbox with a stand-in for proot; phone run pending |
 | Browser opens after `npm start`, `python -m http.server`, `runserver` | Built | Sandbox with real servers; the Android intent is pending a phone run |

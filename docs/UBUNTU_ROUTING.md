@@ -27,9 +27,26 @@ version of the command (python, make), the phone's version runs instead.
   files that start with the Linux program header and have a plain name get one.
   An Intel program found the same way is run through qemu. `sudo -i` opens an Ubuntu
   shell. `cargo` keeps its build folder inside Ubuntu (`cargo run` works).
-- **Python environments.** `python -m venv .venv` creates the environment inside
-  Ubuntu; `.venv/bin/activate` points to it. `pip install` outside an environment
-  is allowed (the system "externally managed" lock is turned off).
+- **Python environments.** `python3 -m venv <dir>` takes the arguments of the real command (`--prompt`,
+  `--without-pip`, `--system-site-packages`, several folders ...) and makes a real environment wherever the folder can hold
+  one: in the app's private storage, or at a path that exists only inside Ubuntu (`/root/env`, `/tmp/env`), it is the
+  ordinary environment with symbolic links. In **shared storage** (`/storage/emulated/0/VSCodroid/...`) Android allows
+  neither links nor starting a program, so the real environment is made inside Ubuntu (`/root/.venvs/<name>-<id>`, the
+  same one every time for the same folder) while the project gets `<dir>/bin/activate`, `python`, `python3`, `pip` and
+  `pip3`: text files that say what they are. In this terminal `source <dir>/bin/activate` works (prompt, `deactivate`,
+  `python`, `pip` and `sys.prefix` all refer to the environment) and `<dir>/bin/python ...`, `<dir>/bin/pip ...` run that
+  environment's programs (the names are defined when the shell starts in the project folder, and whenever the folder
+  changes). Before Ubuntu is installed the same layout is made with the phone's own Python (`~/venvs/<name>-<id>`). Limits:
+  the environment is not stored in the project, so it is not part of a copy or a commit; a program that starts
+  `<dir>/bin/python` itself (an extension, a `type: process` task) cannot, because the file is text; a path with spaces or
+  odd characters gets no name defined; an environment made by the phone's Python is not used from inside Ubuntu. Any failure
+  (Python's own, a missing `bin/python`, a folder that cannot be written) is reported with a failure status. `pip install`
+  outside an environment is allowed (the system "externally managed" lock is turned off).
+- **Environment variables.** What you export (`export FOO=1`, `CC=clang make`, a task's `env`) reaches the command in
+  Ubuntu, as on a PC. Not passed: names that belong to the phone or the app (`PATH`, `HOME`, `TMPDIR`, `LD_*`, `ANDROID_*`,
+  `VSCODROID_*`, `PYTHONHOME`, `SSL_CERT_*`, `NODE_*`, `GIT_EXEC_PATH` and the like) and any value that points into the app's
+  own storage or Android's system folders (a phone `JAVA_HOME`), because those paths do not exist in Ubuntu. Ubuntu's own
+  `HOME`, `PATH`, `TERM` and `LANG` always win.
 - **Opt out.** `command cmd` runs the phone's own command, if it has one (`VSCODROID_NO_UBUNTU=1` does the same
   for tasks and tests).
 - **Setup.** The first use of a tool that lives in Ubuntu installs the Ubuntu system by itself (the same script as the

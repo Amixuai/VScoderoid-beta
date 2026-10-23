@@ -49,7 +49,7 @@ folder picker: tap to the folder you want. A new empty folder can be made from t
 and `apt` run in the Ubuntu system (installed on first use, a few minutes, needs internet).
 `./program` runs what you built; `sudo -i` opens a shell inside Ubuntu; `command cmd` runs the phone's own
 version of a command, if it has one. After `npm start` or `python -m http.server` the page opens in your browser. Android's
-shared storage has no symbolic links, so `npm install` and `python -m venv` are adjusted for you.
+shared storage has no symbolic links, so `npm install` and `python -m venv` are adjusted for you. A virtual environment for a project there is kept inside Ubuntu (or in the app's own storage before Ubuntu is installed); `source .venv/bin/activate`, `.venv/bin/python` and `.venv/bin/pip` work in the VSCodroid terminal, but a program that starts `.venv/bin/python` itself, such as an extension, cannot.
 See [UBUNTU_ROUTING](./UBUNTU_ROUTING.md) and [SYMLINKS_ON_PUBLIC_STORAGE](./SYMLINKS_ON_PUBLIC_STORAGE.md).
 
 ### Repairing the Linux Environment
@@ -494,7 +494,7 @@ Extensions that use webview panels (such as theme configurators, documentation v
 
 The Jupyter extension (`ms-toolsai.jupyter`) installs from the Extensions view like any other. It reaches a notebook kernel through a messaging add-on it carries only in builds for desktop systems, so VSCodroid supplies an Android build of that add-on.
 
-Notebooks run in a Python virtual environment. Create one in the terminal with `python3 -m venv .venv`, open a `.ipynb` file, choose **Select Kernel**, then **Python Environments...**, and pick that environment. If it does not have `ipykernel` yet, the extension installs it when the first cell runs, which takes about half a minute and needs a network connection. `ipykernel` depends on `psutil`, which PyPI has no Android build of; pip takes it from the prebuilt packages described in [Python Packages Written in C](#python-packages-written-in-c).
+Notebooks run in a Python virtual environment. Create one in the terminal with `python3 -m venv .venv`, open a `.ipynb` file, choose **Select Kernel**, then **Python Environments...**, and pick that environment. (Not verified on a phone: the extension starts the kernel itself, and the interpreter file of an environment in shared storage is only text, so it may not be able to.) If it does not have `ipykernel` yet, the extension installs it when the first cell runs, which takes about half a minute and needs a network connection. `ipykernel` depends on `psutil`, which PyPI has no Android build of; pip takes it from the prebuilt packages described in [Python Packages Written in C](#python-packages-written-in-c).
 
 If the extension offers to install `jupyter` and `notebook`, decline: that is a Jupyter server, whose dependencies cannot be built here and whose commands Android will not run from the app's storage.
 

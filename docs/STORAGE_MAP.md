@@ -9,7 +9,7 @@
 | The Ubuntu system | `~/proot/ubuntu` in private storage (`~/proot/ubuntu-amd64` for Intel programs) | It is the system's files, not yours; programs in it must be able to run |
 | npm and other tool caches, user configuration | The private home (`~/.npm`, `~/.config`, ...) | As on a PC they sit beside the user, not in a project |
 | Git sign-in for Ubuntu's git, and its settings | `~/.vscodroid/ubuntu-git` in private storage, shown in Ubuntu as `/root/.vscodroid-git` | Never in a project, never in a backup |
-| Python virtual environments | Inside Ubuntu, with `.venv/bin/activate` left in the project | Shared storage cannot hold the links or run the programs an environment needs |
+| Python virtual environments | Inside Ubuntu (or in the app's own storage before Ubuntu is installed), with `.venv/bin/activate`, `python`, `python3`, `pip`, `pip3` left in the project as text files | Shared storage cannot hold the links or run the programs an environment needs |
 | Programs you build in a project | The project folder; started through a private copy | Android will not run a program stored in shared storage |
 | Everything else the editor needs (runtime, extensions, settings) | Private storage | System files |
 
