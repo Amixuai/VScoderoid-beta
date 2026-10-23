@@ -47,6 +47,37 @@ __vscodroid_ub_log() {
 }
 
 # Runs a command inside Ubuntu, in the current folder.
+# Fill envv (the caller's array) with the user's own exported variables. Left out: names
+# that belong to the phone or to this app, and any value that points into the app's own
+# storage or Android's system folders, because those paths do not exist inside Ubuntu
+# (PYTHONHOME, LD_LIBRARY_PATH, a phone JAVA_HOME and the like would break its programs).
+__vscodroid_ub_userenv() {
+  local n v app nat
+  app=${PREFIX%/usr}; nat=${VSCODROID_PROOT%/*}
+  [ "$app" = "${PREFIX-}" ] && app=""
+  for n in $(compgen -e); do
+    case "$n" in
+      *[!A-Za-z0-9_]*|[0-9]*) continue ;;
+      HOME|PATH|TMPDIR|TMP|TEMP|TMUX_TMPDIR|TERM|TERMINFO|LANG|SHELL|PWD|OLDPWD|SHLVL|_|IFS|OPTIND|OPTARG) continue ;;
+      PS1|PS2|PS3|PS4|PROMPT_COMMAND|PROMPT_DIRTRIM|MAIL|MAILCHECK|MAILPATH|COLUMNS|LINES|DISPLAY|VIRTUAL_ENV) continue ;;
+      LD_*|ANDROID_*|VSCODROID_*|PROOT_*|BASH*|HIST*|COMP_*|VSCODE_*|ELECTRON_*|NODE_*|NPM_CONFIG_*|npm_*) continue ;;
+      PREFIX|PYTHONHOME|PYTHONPYCACHEPREFIX|PIP_CACHE_DIR|PROJECTS_DIR|USE_BUILTIN_RIPGREP|ZEROMQ_PREBUILD) continue ;;
+      SSL_CERT_FILE|SSL_CERT_DIR|OPENSSL_CONF|REQUESTS_CA_BUNDLE|CURL_CA_BUNDLE|GIT_EXEC_PATH|GIT_TEMPLATE_DIR) continue ;;
+      GIT_SSH_COMMAND|GIT_SSL_CAPATH|GIT_SSL_CAINFO|GIT_CONFIG_GLOBAL|GIT_ASKPASS|SSH_ASKPASS) continue ;;
+      BOOTCLASSPATH|DEX2OATBOOTCLASSPATH|SYSTEMSERVERCLASSPATH|STANDALONE_SYSTEMSERVER_JARS|ASEC_MOUNTPOINT) continue ;;
+      EXTERNAL_STORAGE|DOWNLOAD_CACHE|LOOP_MOUNTPOINT|PRELINK_*|ANDROID_DATA|ANDROID_ROOT) continue ;;
+    esac
+    v=${!n}
+    [ -n "$app" ] && case "$v" in *"$app"*) continue ;; esac
+    [ -n "$nat" ] && [ "$nat" != "$VSCODROID_PROOT" ] && case "$v" in *"$nat"*) continue ;; esac
+    case "$v" in
+      */data/data/*|*/data/user/*|/system/*|*:/system/*|/apex/*|*:/apex/*|/vendor/*|*:/vendor/*) continue ;;
+    esac
+    envv+=("$n=$v")
+  done
+  return 0
+}
+
 __vscodroid_ub_exec() {
   local root cwd d
   root=$(__vscodroid_ub_root)
@@ -61,10 +92,25 @@ __vscodroid_ub_exec() {
   [ -d "$gitdir" ] && bind+=(-b "$gitdir:/root/.vscodroid-git")
 
   local gpath=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-  local -a envv=(HOME=/root "TERM=${TERM:-xterm}" LANG=C.UTF-8 DEBIAN_FRONTEND=noninteractive
-                 PIP_BREAK_SYSTEM_PACKAGES=1 PIP_ROOT_USER_ACTION=ignore)
-  if [ -n "${VSCODROID_VENV-}" ]; then
-    envv+=("VIRTUAL_ENV=$VSCODROID_VENV"); gpath="$VSCODROID_VENV/bin:$gpath"
+  # What the user exported (CC=clang make, an `export FOO=1`, a task's "env") reaches the
+  # command, as on a PC. The fixed settings below come last and win.
+  local -a envv=()
+  __vscodroid_ub_userenv
+  envv+=(HOME=/root "TERM=${TERM:-xterm}" LANG=C.UTF-8 DEBIAN_FRONTEND=noninteractive
+         PIP_BREAK_SYSTEM_PACKAGES=1 PIP_ROOT_USER_ACTION=ignore)
+  # An activated environment: either one that lives inside Ubuntu (VSCODROID_VENV, set by
+  # the activate file of a project in shared storage) or an ordinary one whose folder the
+  # guest can see (VIRTUAL_ENV, set by its own activate script).
+  local venv=${VSCODROID_VENV-}
+  # (An environment made with the phone's own Python names the phone's folder as its home
+  # and cannot be used from inside Ubuntu; only one whose home is /usr/... is taken up.)
+  if [ -z "$venv" ] && [ -n "${VIRTUAL_ENV-}" ] && [ -d "$VIRTUAL_ENV/bin" ] &&
+     grep -Eq '^home *= */usr/' "$VIRTUAL_ENV/pyvenv.cfg" 2>/dev/null; then
+    venv=$VIRTUAL_ENV
+    case "$venv" in /storage/emulated/0/*) ;; "$cwd"|"$cwd"/*) ;; *) bind+=(-b "$venv") ;; esac
+  fi
+  if [ -n "$venv" ]; then
+    envv+=("VIRTUAL_ENV=$venv"); gpath="$venv/bin:$gpath"
   fi
   envv+=("PATH=$gpath")
   [ -f "$gitdir/gitconfig" ] && envv+=(GIT_CONFIG_GLOBAL=/root/.vscodroid-git/gitconfig)
@@ -233,28 +279,158 @@ __vscodroid_ub_provision() {
   return 1
 }
 
-# python -m venv <dir>: the environment cannot live in shared storage, so it is
-# created inside Ubuntu and <dir>/bin/activate points to it.
+# python -m venv <dir> ...
+#
+# Where the environment can live decides how it is made:
+#
+#  * Not in shared storage (a folder in the app's private storage, or a path that exists
+#    only inside Ubuntu such as /root/env or /tmp/env): the real `python3 -m venv` runs
+#    inside Ubuntu with the arguments exactly as typed. It is an ordinary virtual
+#    environment, with symbolic links, and nothing is faked.
+#
+#  * In shared storage (a project in /storage/emulated/0/VSCodroid): the filesystem
+#    cannot hold symbolic links or start a program, so a real environment cannot be put
+#    there. The real environment is made inside Ubuntu (/root/.venvs/<name>-<id>, the
+#    same one every time for the same project folder) and the project gets
+#    <dir>/bin/activate, <dir>/bin/python, python3, pip and pip3. They are text files that
+#    say so. In this terminal `source <dir>/bin/activate` and the paths
+#    <dir>/bin/python ... run Ubuntu's Python from that environment (see
+#    __vscodroid_ub_define_venv); nothing outside this terminal, an extension that starts
+#    <dir>/bin/python itself for instance, can start them. The environment is not stored
+#    in the project, so it is not part of a copy or a commit of the project.
+#
+# Every failure is reported and returns a failure status; nothing returns success for an
+# environment that was not made.
+#
+# $1 and $2 are "-m" and "venv". Status 2 hands the command back to the real python3
+# (no folder given, or --help), which prints what it always prints.
 __vscodroid_ub_venv() {
-  local a target="" abs name id guest
-  local -a opts=()
-  for a in "${@:3}"; do case "$a" in -*) opts+=("$a") ;; *) target=$a ;; esac; done
-  [ -n "$target" ] || return 2
-  case "$target" in /*) abs=$target ;; *) abs="$(pwd -P 2>/dev/null || pwd)/$target" ;; esac
-  name=${abs##*/}; name=${name#.}; [ -n "$name" ] || name=env
-  id=$(printf '%s' "$abs" | cksum | cut -d' ' -f1)
-  guest="/root/.venvs/$name-$id"
-  __vscodroid_ub_exec python3 -m venv ${opts[@]+"${opts[@]}"} "$guest" || return $?
-  mkdir -p "$abs/bin" 2>/dev/null || return 0
-  printf '%s\n' \
-    "# VSCodroid: this environment lives inside the Ubuntu system, because shared storage cannot hold one." \
-    "export VSCODROID_VENV='$guest'" \
-    '__vscodroid_ps1_old=${PS1-}' \
-    "PS1='($name) '\"\${PS1-}\"" \
-    'deactivate() { unset VSCODROID_VENV; PS1=$__vscodroid_ps1_old; unset __vscodroid_ps1_old; unset -f deactivate; }' \
-    > "$abs/bin/activate"
-  echo "vscodroid: environment created. Activate it with:  source $target/bin/activate" >&2
+  local a skip=0 t abs name id guest st rc=0
+  local -a opts=() targets=()
+  shift 2
+  for a in "$@"; do
+    if [ "$skip" = 1 ]; then opts+=("$a"); skip=0; continue; fi
+    case "$a" in
+      -h|--help) return 2 ;;
+      --prompt) opts+=("$a"); skip=1 ;;
+      -*) opts+=("$a") ;;
+      *) targets+=("$a") ;;
+    esac
+  done
+  [ "${#targets[@]}" -gt 0 ] || return 2
+  for t in "${targets[@]}"; do
+    case "$t" in /*) abs=$t ;; *) abs="$(pwd -P 2>/dev/null || pwd)/$t" ;; esac
+    abs=$(printf '%s' "$abs" | sed 's|/\./|/|g; s|//*|/|g; s|/\.$||; s|/$||')
+    if ! __vscodroid_ub_on_shared "$abs"; then
+      __vscodroid_ub_fg python3 -m venv ${opts[@]+"${opts[@]}"} "$t"; st=$?
+      if [ $st -ne 0 ]; then rc=$st; continue; fi
+      # A path that exists only inside Ubuntu cannot be seen from this terminal; name the
+      # programs in it so that its bin/python, bin/pip ... can still be typed here.
+      if [ -e "$abs/pyvenv.cfg" ]; then
+        __vscodroid_ub_define_venv "$abs"
+      else
+        __vscodroid_ub_define_venv_paths "$abs" "$t"
+      fi
+      continue
+    fi
+    name=${abs##*/}
+    id=$(printf '%s' "$abs" | cksum | cut -d' ' -f1)
+    guest="/root/.venvs/${name#.}-$id"
+    __vscodroid_ub_exec python3 -m venv ${opts[@]+"${opts[@]}"} "$guest"; st=$?
+    if [ $st -ne 0 ]; then
+      echo "vscodroid: the environment was not created (python3 exited with status $st)." >&2
+      rc=$st; continue
+    fi
+    if ! __vscodroid_ub_exec test -x "$guest/bin/python" >/dev/null 2>&1; then
+      echo "vscodroid: python3 reported success but $guest/bin/python is missing in Ubuntu; the environment was not created." >&2
+      rc=1; continue
+    fi
+    if ! mkdir -p "$abs/bin"; then
+      echo "vscodroid: could not create $abs/bin (is the folder writable?). The environment inside Ubuntu was made, but the project has no activate file." >&2
+      rc=1; continue
+    fi
+    if ! __vscodroid_ub_write_venv_files "$abs" "$name" "$guest"; then
+      echo "vscodroid: could not write the activate files into $abs/bin." >&2
+      rc=1; continue
+    fi
+    __vscodroid_ub_define_venv "$abs"
+    echo "vscodroid: environment created inside Ubuntu ($guest). Activate it with:  source $t/bin/activate" >&2
+  done
+  return $rc
+}
+
+# The text files a project in shared storage gets (see the comment above).
+__vscodroid_ub_write_venv_files() {
+  local abs=$1 name=$2 guest=$3 c
+  {
+    printf '%s\n' \
+      "# vscodroid-venv activate guest=$guest" \
+      "# VSCodroid: this environment lives inside the Ubuntu system, because shared storage cannot hold one." \
+      "# Source this file in the VSCodroid terminal:  source ${abs}/bin/activate" \
+      'deactivate() {' \
+      '  if [ -n "${_OLD_VSCODROID_PS1+x}" ]; then PS1=$_OLD_VSCODROID_PS1; unset _OLD_VSCODROID_PS1; fi' \
+      '  unset VSCODROID_VENV' \
+      '  unset -f deactivate' \
+      '}' \
+      '[ -n "${_OLD_VSCODROID_PS1+x}" ] || _OLD_VSCODROID_PS1=${PS1-}' \
+      "export VSCODROID_VENV='$guest'" \
+      "PS1=\"($name) \${_OLD_VSCODROID_PS1}\""
+  } > "$abs/bin/activate" || return 1
+  for c in python python3 pip pip3; do
+    printf '%s\n' \
+      '#!/bin/sh' \
+      "# vscodroid-venv $c guest=$guest" \
+      '# Android cannot start a program stored in shared storage. In the VSCodroid terminal this path runs' \
+      "# $c from the environment inside Ubuntu named above; nothing else can start this file." \
+      'echo "vscodroid: this file is not a program; run it from the VSCodroid terminal" >&2' \
+      'exit 126' > "$abs/bin/$c" || return 1
+  done
   return 0
+}
+
+# Make <dir>/bin/python, python3, pip and pip3 typable (as written, absolute, and ./relative)
+# for an environment folder <dir>. Which kind it is, is read from the folder itself:
+#   a "vscodroid-venv" activate file     -> the environment inside Ubuntu it names
+#   an ordinary one (pyvenv.cfg)         -> that folder, which Ubuntu sees through its bind
+# Only plain names are defined (letters, digits and _ . / + -).
+__vscodroid_ub_define_venv() {
+  local d=$1 abs first guest="" kind c n here rel
+  abs=$(cd "$d" 2>/dev/null && pwd -P) || return 0
+  [ -f "$abs/bin/activate" ] || return 0
+  first=$(head -n1 "$abs/bin/activate" 2>/dev/null)
+  case "$first" in
+    "# vscodroid-venv activate guest="*) guest=${first#*guest=}; kind=stub ;;
+    "# vscodroid-venv activate native="*) guest=${first#*native=}; kind=native ;;
+    *) [ -f "$abs/pyvenv.cfg" ] || return 0; kind=real ;;
+  esac
+  here=$(pwd -P 2>/dev/null)
+  # The same folder as typed from here: ".venv", and "./.venv" (empty when it is elsewhere).
+  case "$abs" in "$here"/*) rel=${abs#"$here"/} ;; *) rel="" ;; esac
+  for c in python python3 pip pip3; do
+    [ -e "$abs/bin/$c" ] || [ -L "$abs/bin/$c" ] || continue
+    for n in "$abs/bin/$c" "${d%/}/bin/$c" "$rel/bin/$c" "./$rel/bin/$c"; do
+      case "$n" in ""|*[!A-Za-z0-9_./+-]*) continue ;; esac
+      case "$n" in */*) ;; *) continue ;; esac
+      case "$n" in "./$abs"*|"//"*|/bin/*|./bin/*) continue ;; esac
+      case "$kind" in
+        stub)   eval "function $n { VSCODROID_VENV='$guest' $c \"\$@\"; }" ;;
+        native) eval "function $n { '$guest/bin/$c' \"\$@\"; }" ;;
+        *)      eval "function $n { VIRTUAL_ENV='$abs' $c \"\$@\"; }" ;;
+      esac
+    done
+  done
+  return 0
+}
+
+# A venv that exists only inside Ubuntu: <dir>/bin/python ... run there, from this terminal.
+__vscodroid_ub_define_venv_paths() {
+  local abs=$1 shown=$2 c n
+  for c in python python3 pip pip3; do
+    for n in "$abs/bin/$c" "${shown%/}/bin/$c"; do
+      case "$n" in ""|*[!A-Za-z0-9_./+-]*) continue ;; esac
+      eval "function $n { __vscodroid_ub_fg '$abs/bin/$c' \"\$@\"; }"
+    done
+  done
 }
 
 declare -A __vscodroid_ub_nat 2>/dev/null
@@ -365,6 +541,17 @@ __vscodroid_ub_define_prog() {
   done
 }
 
+# Make <env>/bin/python ... typable for each virtual environment folder found here.
+# Cheap, and does not need Ubuntu to exist: it runs when the shell starts (so a task that
+# starts in the project folder has it) and again whenever the folder changes.
+__vscodroid_ub_scan_venvs() {
+  local f
+  for f in ./*/bin/activate ./.[!.]*/bin/activate; do
+    [ -f "$f" ] && __vscodroid_ub_define_venv "${f%/bin/activate}"
+  done
+  return 0
+}
+
 # Define ./name for each program found here and in the usual build folders.
 __vscodroid_ub_scan() {
   __vscodroid_ub_ready || return 0
@@ -388,8 +575,10 @@ __vscodroid_ub_prompt() {
   k="$(pwd -P 2>/dev/null):$(stat -c %Y . 2>/dev/null)"
   [ "$k" = "$__vscodroid_ub_scan_key" ] && return 0
   __vscodroid_ub_scan_key=$k
+  __vscodroid_ub_scan_venvs
   __vscodroid_ub_scan
 }
+__vscodroid_ub_scan_venvs
 case $- in
   *i*)
     if declare -p PROMPT_COMMAND 2>/dev/null | grep -q '^declare -a'; then

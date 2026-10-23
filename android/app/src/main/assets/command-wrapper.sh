@@ -198,8 +198,18 @@ fi
 # A virtual environment needs symbolic links and a program it can start, and
 # shared storage offers neither. So `python -m venv <dir>` on shared storage is
 # created in the app's own storage instead (~/venvs/<name>-<id>), and <dir>/bin/
-# gets a small activate file that points at it. `source <dir>/bin/activate` then
-# works exactly as on a desktop. Sourcing needs no execute permission.
+# gets an activate file that points at it, plus python, python3, pip and pip3 as
+# text files that say so. `source <dir>/bin/activate` then works as on a desktop
+# (sourcing needs no execute permission), and in this terminal the paths
+# <dir>/bin/python ... run the programs of that environment (see
+# __vscodroid_ub_define_venv in ubuntu-env.sh). Nothing else can start those
+# files: an extension that spawns <dir>/bin/python itself will not work.
+#
+# This is the path for the phone's own Python, used while the Ubuntu system is
+# not installed. Once it is, `python -m venv` goes to Ubuntu (ubuntu-env.sh).
+#
+# Every failure is reported and returns a failure status; nothing returns success
+# for an environment that was not made.
 #
 # Everything else about `python` (including `python -m venv` in internal
 # storage, and every other `-m` module) runs unchanged.
@@ -229,19 +239,48 @@ __vscodroid_py() {
   for __a in "${__opts[@]}"; do
     case "$__a" in --copies|--symlinks) ;; *) __keep+=("$__a") ;; esac
   done
-  local __name __id __home
+  local __name __id __home __k
   __name=$(basename "$__abs"); __name=${__name#.}; [ -n "$__name" ] || __name=env
   __id=$(printf '%s' "$__abs" | cksum | cut -d' ' -f1)
   __home="$HOME/venvs/$__name-$__id"
-  mkdir -p "$HOME/venvs" 2>/dev/null
+  if ! mkdir -p "$HOME/venvs"; then
+    echo "vscodroid: cannot create $HOME/venvs, so the environment was not created." >&2
+    return 1
+  fi
   "__vscodroid_orig_$__c" -m venv "${__keep[@]}" "$__home"
   local __st=$?
-  [ $__st -eq 0 ] || return $__st
-  mkdir -p "$__abs/bin" 2>/dev/null || return 0
-  printf '%s\n' \
-    "# VSCodroid: this environment lives in the app's own storage, because" \
-    "# shared storage cannot hold one. Sourcing this file activates it." \
-    ". \"$__home/bin/activate\"" > "$__abs/bin/activate"
+  if [ $__st -ne 0 ]; then
+    echo "vscodroid: the environment was not created (python exited with status $__st)." >&2
+    return $__st
+  fi
+  if [ ! -e "$__home/bin/python" ]; then
+    echo "vscodroid: python reported success but $__home/bin/python is missing; the environment was not created." >&2
+    return 1
+  fi
+  if ! mkdir -p "$__abs/bin"; then
+    echo "vscodroid: could not create $__abs/bin (is the folder writable?). The environment was made in $__home, but the project has no activate file." >&2
+    return 1
+  fi
+  if ! (
+    printf '%s\n' \
+      "# vscodroid-venv activate native=$__home" \
+      "# VSCodroid: this environment lives in the app's own storage, because" \
+      "# shared storage cannot hold one. Sourcing this file activates it." \
+      ". \"$__home/bin/activate\"" > "$__abs/bin/activate" || exit 1
+    for __k in python python3 pip pip3; do
+      printf '%s\n' \
+        '#!/bin/sh' \
+        "# vscodroid-venv $__k native=$__home" \
+        '# Android cannot start a program stored in shared storage. In the VSCodroid terminal this path runs' \
+        "# $__k from the environment named above; nothing else can start this file." \
+        'echo "vscodroid: this file is not a program; run it from the VSCodroid terminal" >&2' \
+        'exit 126' > "$__abs/bin/$__k" || exit 1
+    done
+  ); then
+    echo "vscodroid: could not write the activate files into $__abs/bin." >&2
+    return 1
+  fi
+  declare -F __vscodroid_ub_define_venv >/dev/null 2>&1 && __vscodroid_ub_define_venv "$__abs"
   echo "vscodroid: environment created. Activate it with:  source $__target/bin/activate" >&2
   return 0
 }
