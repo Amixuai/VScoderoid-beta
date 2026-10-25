@@ -590,4 +590,10 @@
          tls_unknown_host stands in for an address. Written in Kotlin before, so
          one English word survived inside an otherwise translated About dialog. -->
     <string name="about_version_unknown">inconnue</string>
+    <string name="key_desc_quick_commands">Palette de commandes</string>
+    <string name="key_desc_quick_open">Accéder au fichier</string>
+    <string name="key_desc_quick_terminal">Activer/désactiver le terminal</string>
+    <string name="key_desc_quick_side_bar">Basculer la barre latérale primaire</string>
+    <string name="key_desc_quick_panel">Activer/désactiver le panneau</string>
+    <string name="key_desc_quick_save">Enregistrer</string>
 </resources>

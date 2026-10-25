@@ -592,4 +592,16 @@
          tls_unknown_host stands in for an address. Written in Kotlin before, so
          one English word survived inside an otherwise translated About dialog. -->
     <string name="about_version_unknown">unknown</string>
+
+    <!-- The quick actions page, the last page of the key row. Each key sends one
+         of the workbench's shortcuts and is named for the command it runs, in the
+         words the editor itself uses for it, so a reader hears what the Command
+         Palette would show. The label drawn on the key is the shortcut, ^P for
+         Ctrl+P, and is not translated, like every other label on the row. -->
+    <string name="key_desc_quick_commands">Command Palette</string>
+    <string name="key_desc_quick_open">Go to File</string>
+    <string name="key_desc_quick_terminal">Toggle Terminal</string>
+    <string name="key_desc_quick_side_bar">Toggle Primary Side Bar</string>
+    <string name="key_desc_quick_panel">Toggle Panel</string>
+    <string name="key_desc_quick_save">Save</string>
 </resources>

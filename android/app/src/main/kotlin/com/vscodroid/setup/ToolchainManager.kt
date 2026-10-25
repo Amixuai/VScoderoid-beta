@@ -322,6 +322,26 @@ class ToolchainManager(private val context: Context) {
         private const val KEY_EXEC_REPAIRED = "execBitsChecked"
 
         /**
+         * Environment a toolchain's manifest carries today and an install made by an
+         * earlier build does not, by toolchain name. The record keeps the manifest it
+         * was installed with, so a variable added to the pack's manifest reaches new
+         * installs only; [backfillToolchainEnvSync] adds these to the rest.
+         *
+         * Ruby: `RUBYOPT=-rrubygems`, because the interpreter starts without
+         * RubyGems and a script's `require` of an installed gem fails (see
+         * `scripts/download-ruby.sh`).
+         */
+        private val ENV_BACKFILL = mapOf(
+            "ruby" to mapOf("RUBYOPT" to "-rrubygems"),
+        )
+
+        /**
+         * Environment variables that hold a list of options the caller may already have
+         * set, which a toolchain adds to rather than replaces.
+         */
+        private val OPTION_LIST_VARS = setOf("RUBYOPT")
+
+        /**
          * How much of a file in `usr/bin` is read to find out what runs it.
          *
          * A `#!` line is the first thing in the file and a console script's is well
@@ -2784,7 +2804,22 @@ class ToolchainManager(private val context: Context) {
                 // transformation and is not one.
                 val value = env.getString(key)
                     .replace("\$FILESDIR", "\$PREFIX/..")
-                sb.appendLine("export $key=\"$value\"")
+                if (!isShellSafeEnvEntry(key, value)) {
+                    Logger.w(tag, "No export for $name's $key: not a line that is " +
+                        "safe to put in a file every terminal sources")
+                    continue
+                }
+                if (key in OPTION_LIST_VARS) {
+                    // Added to what the parent passed, once. A plain export put
+                    // `-rrubygems` over the `-rbundler/setup` of a `bundle exec`, so
+                    // a bash started under it lost the Gemfile's gems.
+                    sb.appendLine(
+                        "case \" \${$key-} \" in *\" $value \"*) ;; " +
+                            "*) export $key=\"\${$key:+\$$key }$value\" ;; esac"
+                    )
+                } else {
+                    sb.appendLine("export $key=\"$value\"")
+                }
             }
             sb.appendLine()
 
@@ -3728,6 +3763,14 @@ class ToolchainManager(private val context: Context) {
                 Logger.w(tag, "Toolchain repair pass failed: ${e.message}")
             }
             try {
+                // Before the derived files below are written from the record, so
+                // that the variable is in the env file and the exec table of this
+                // launch. A value the record already has is never overwritten.
+                backfillToolchainEnvSync()
+            } catch (e: Exception) {
+                Logger.w(tag, "Could not add a toolchain's new environment: ${e.message}")
+            }
+            try {
                 // Unconditionally, and separately from the repair above, because
                 // the two answer different questions. The repair is marked done per
                 // toolchain and never runs again; this has to run on every launch,
@@ -3956,6 +3999,30 @@ class ToolchainManager(private val context: Context) {
             }
         }
 
+        if (changed) writeState(state)
+    }
+
+    /**
+     * Adds the [ENV_BACKFILL] variables an installed toolchain's record lacks.
+     *
+     * Runs on every launch and writes only when something is missing, so a record
+     * that has them costs one read. A key the record already holds is left as it
+     * is, whatever its value, and a record that cannot be read is not rewritten.
+     */
+    private fun backfillToolchainEnvSync() = synchronized(stateLock) {
+        val state = readState()
+        var changed = false
+        for (i in 0 until state.length()) {
+            val entry = state.optJSONObject(i) ?: continue
+            val wanted = ENV_BACKFILL[entry.optString("name")] ?: continue
+            val env = entry.optJSONObject("env") ?: JSONObject().also { entry.put("env", it) }
+            for ((key, value) in wanted) {
+                if (!env.has(key)) {
+                    env.put(key, value)
+                    changed = true
+                }
+            }
+        }
         if (changed) writeState(state)
     }
 
@@ -4805,3 +4872,17 @@ internal fun otherToolchainLibs(state: JSONArray, exceptName: String): Set<Strin
     }
     return shared
 }
+
+/**
+ * Whether `export [key]="[value]"` is a line `toolchain-env.sh` can carry.
+ *
+ * A manifest comes from the pack the app ships or the release ZIP whose digest the same
+ * release publishes, so this is not a boundary against it. It is a bar that keeps one
+ * unusable entry from taking out the file every new terminal sources. `$FILESDIR` and
+ * `$HOME` stay possible, because the manifests mean them; a command substitution, a
+ * backtick, a double quote, a backslash and a line break do not, and neither does a name
+ * that is not a variable's.
+ */
+internal fun isShellSafeEnvEntry(key: String, value: String): Boolean =
+    key.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) &&
+        value.none { it == '"' || it == '`' || it == '\\' || it == '\n' || it == '\r' } && "\$(" !in value

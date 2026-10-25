@@ -24,6 +24,7 @@
  * - vscodroid.uiScale              : Sets the size of the whole interface
  * - vscodroid.about                : Opens the Android About dialog
  * - vscodroid.copyBugReport        : Opens a bug report to read, then copies it
+ * - vscodroid.runFile              : Runs the open file in a terminal, from the editor title bar
  *
  * It also warns about a workspace folder opened by path on shared storage, and
  * offers Open Folder from Device instead; and it offers to reopen a device
@@ -113,6 +114,55 @@ function sendBridgeCommand(cmd, extra = {}, timeoutMs = BRIDGE_TIMEOUT_MS) {
             }
         }, timeoutMs);
     });
+}
+
+/** The terminal the Run button reuses, so that a second run replaces the first. */
+const RUN_TERMINAL = 'VSCodroid Run';
+
+/** The record of installed on-demand toolchains, from this extension's own directory. */
+const TOOLCHAIN_STATE = ['..', '..', 'toolchains.json'];
+
+/**
+ * What the Run button runs, by language id. `toolchain` is the name in toolchains.json of
+ * the on-demand toolchain the language needs, `label` what to call it when it is missing.
+ * The keys are the languages named in the button's `when` in package.json; a test keeps the
+ * two equal.
+ *
+ * C and C++ need no pack here: `cc` and `c++` are the routed names that run the Ubuntu
+ * system's compilers (first use installs them), so there is no second compiler to keep. The
+ * program is built to /tmp, which is Ubuntu's own, so a folder opened from shared storage
+ * never gets a binary written into it, and is started with `ubuntu`, because the next
+ * command would otherwise look for /tmp/vscodroid-run on the phone. `&&` means a failed
+ * build never starts the previous run's binary.
+ */
+const RUN_COMMANDS = {
+    javascript: { command: (/** @type {string} */ file) => `node ${file}` },
+    typescript: { command: (/** @type {string} */ file) => `node ${file}` },
+    shellscript: { command: (/** @type {string} */ file) => `bash ${file}` },
+    ruby: { toolchain: 'ruby', label: 'Ruby', command: (/** @type {string} */ file) => `ruby ${file}` },
+    java: { toolchain: 'java', label: 'Java 21', command: (/** @type {string} */ file) => `java ${file}` },
+    c: { command: (/** @type {string} */ file) => `cc ${file} -o /tmp/vscodroid-run && ubuntu /tmp/vscodroid-run` },
+    cpp: { command: (/** @type {string} */ file) => `c++ ${file} -o /tmp/vscodroid-run && ubuntu /tmp/vscodroid-run` },
+};
+
+/** A path as a single shell word. */
+function shellQuote(/** @type {string} */ path) {
+    return `'${path.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * The names of the installed toolchains, or undefined when the record cannot be read for a
+ * reason other than there being none yet: the first install writes the file.
+ * @param {vscode.ExtensionContext} context
+ * @returns {Promise<string[] | undefined>}
+ */
+async function installedToolchains(context) {
+    try {
+        const record = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(context.extensionUri, ...TOOLCHAIN_STATE));
+        return JSON.parse(new TextDecoder().decode(record)).map((/** @type {{name: string}} */ t) => t.name);
+    } catch (/** @type {*} */ err) {
+        return err && err.code === 'FileNotFound' ? [] : undefined;
+    }
 }
 
 /**
@@ -857,6 +907,68 @@ function activate(context) {
         }
     };
     reopenCarriedEditors().then(offerNamedPath).catch(() => {});
+
+    // -- Run File --
+
+    // Python puts a Run button in the editor title bar. Nothing else the app can run
+    // does, and what is left, the Run and Debug view or the palette, takes several taps
+    // and a keyboard to find. This is the button for the rest.
+    const runFileCmd = vscode.commands.registerCommand('vscodroid.runFile', async (/** @type {vscode.Uri | undefined} */ resource) => {
+        // The title bar passes the file of the tab it sits in, which need not be the
+        // active one when the editor is split; the palette passes nothing.
+        const document = resource instanceof vscode.Uri
+            ? vscode.workspace.textDocuments.find((d) => d.uri.toString() === resource.toString())
+            : vscode.window.activeTextEditor?.document;
+        const runner = document && /** @type {Record<string, any>} */ (RUN_COMMANDS)[document.languageId];
+        if (!document || !runner) {
+            vscode.window.showInformationMessage('Open a JavaScript, TypeScript, Ruby, Java, C, C++ or shell file to run it.',
+        runFileCmd
+    );
+            return;
+        }
+        if (document.isUntitled) {
+            vscode.window.showInformationMessage('Save the file before running it.');
+            return;
+        }
+
+        // Unknown (undefined) counts as installed: a record that cannot be read is no
+        // reason to refuse, and the shell says plainly when a program is missing.
+        const installed = runner.toolchain && await installedToolchains(context);
+        if (installed && !installed.includes(runner.toolchain)) {
+            const manage = 'Manage Toolchains';
+            const choice = await vscode.window.showInformationMessage(
+                `${runner.label} is not installed. Add it from the toolchains screen.`, manage
+            );
+            if (choice === manage) {
+                await vscode.commands.executeCommand('vscodroid.manageToolchains');
+            }
+            return;
+        }
+
+        // A control character in the path would be typed into the terminal as a key (a
+        // newline runs the line early, ^C interrupts it), so the file is refused, not quoted.
+        if (/[\u0000-\u001f\u007f]/.test(document.uri.path)) {
+            vscode.window.showErrorMessage('The file name has a control character, so it was not run.');
+            return;
+        }
+
+        // save() answers false for a document that was not dirty, so the outcome is read
+        // from the document: a failed save must not run the older file on disk.
+        await document.save();
+        if (document.isDirty) {
+            vscode.window.showErrorMessage('Could not save the file, so it was not run.');
+            return;
+        }
+        const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+        vscode.window.terminals.find((t) => t.name === RUN_TERMINAL)?.dispose();
+        const terminal = vscode.window.createTerminal({
+            name: RUN_TERMINAL,
+            cwd: folder ? folder.uri.path : document.uri.path.replace(/\/[^/]*$/, '')
+        });
+        // Without taking focus: the keyboard would come up over the output.
+        terminal.show(true);
+        terminal.sendText(runner.command(shellQuote(document.uri.path)));
+    });
 
     context.subscriptions.push(
         workspaceFoldersListener,

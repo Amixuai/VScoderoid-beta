@@ -582,4 +582,10 @@
          tls_unknown_host stands in for an address. Written in Kotlin before, so
          one English word survived inside an otherwise translated About dialog. -->
     <string name="about_version_unknown">不明</string>
+    <string name="key_desc_quick_commands">命令選擇區</string>
+    <string name="key_desc_quick_open">前往檔案</string>
+    <string name="key_desc_quick_terminal">切換終端機</string>
+    <string name="key_desc_quick_side_bar">切換主要提要欄位</string>
+    <string name="key_desc_quick_panel">切換面板</string>
+    <string name="key_desc_quick_save">儲存</string>
 </resources>

@@ -373,8 +373,10 @@ class ExtraKeyRow @JvmOverloads constructor(
      * so this copy cannot drift from the row it is describing without a test
      * saying so.
      */
-    val rowHeightPx: Int =
-        dpToPx(PAGER_HEIGHT_DP) + dotContainer.minimumHeight + dpToPx(2) + dpToPx(4)
+    val rowHeightPx: Int
+        get() = dpToPx(PAGER_HEIGHT_DP) + dotContainer.minimumHeight + dpToPx(2) + dpToPx(4)
+
+    private var densityDpi = resources.configuration.densityDpi
 
     /**
      * Whether the row has stood down because the page had no height to spare.
@@ -436,6 +438,27 @@ class ExtraKeyRow @JvmOverloads constructor(
             ViewCompat.requestApplyInsets(this)
         }
 
+    /**
+     * Whether the last key typed came from a hardware keyboard and no finger has
+     * left the screen since, as `MainActivity` tells it through [HardwareTyping].
+     *
+     * The same row-off decision as [hiddenByUser], reached automatically for the
+     * length of a run of typing: the row repeats keys a hardware keyboard has, and
+     * a soft keyboard kept up beside one gave it height of the editor for
+     * nothing. Transient where that one is persisted, because it is what the row
+     * does for now and not a choice, so a restart starts with the row where the
+     * soft keyboard puts it. It folds into the one decision below for the same
+     * reason the other does: leaving by the door the keyboard going away uses
+     * dismisses the alternates window and clears a latched modifier on the page as
+     * well as on the row.
+     */
+    var hiddenForHardwareKeyboard = false
+        set(value) {
+            if (field == value) return
+            field = value
+            ViewCompat.requestApplyInsets(this)
+        }
+
     fun setupWithRootView(rootView: View) {
         ViewCompat.setOnApplyWindowInsetsListener(rootView) { v, insets ->
             // The display cutout is its own inset type, not part of systemBars().
@@ -473,7 +496,7 @@ class ExtraKeyRow @JvmOverloads constructor(
             } else if (pageHeightPx >= dpToPx(RELEASE_PAGE_HEIGHT_DP)) {
                 suppressedForHeight = false
             }
-            val showRow = imeVisible && !suppressedForHeight && !hiddenByUser
+            val showRow = imeVisible && !suppressedForHeight && !hiddenByUser && !hiddenForHardwareKeyboard
             if (this.imeVisible != imeVisible) {
                 this.imeVisible = imeVisible
                 onImeVisibilityChanged?.invoke(imeVisible)
@@ -667,7 +690,7 @@ class ExtraKeyRow @JvmOverloads constructor(
                 Logger.d(tag, "Shift toggled: $shiftActive")
             }
             else -> {
-                keyInjector?.injectKey(key, ctrlKey = ctrlActive, altKey = altActive, shiftKey = shiftActive)
+                sendKeyPress(keyInjector, key, button.fixedModifiers, KeyModifiers(ctrlActive, altActive, shiftActive))
                 resetModifiersIfNeeded()
             }
         }
@@ -698,11 +721,11 @@ class ExtraKeyRow @JvmOverloads constructor(
      *
      * Decided on the packing rather than on the width. Every change in that
      * `configChanges` list arrives here, rotation and `uiMode` among them, and a
-     * rebuild is not free: it resets the pager to page 1, which a user reading
-     * the function keys would pay for turning the phone over or switching to
-     * dark mode. Comparing the packed pages returns from all of those, since the
-     * packer is a pure function of the width and its result is value-comparable.
-     * A font-scale change is not on the list at all and recreates the activity.
+     * rebuild is not free. Comparing the packed pages returns from unchanged
+     * packing, except for density changes when moving to another display: those
+     * must rebuild the keys and their pixel sizes even at the same logical width.
+     * The selected page and latched modifiers survive that rebuild. A font-scale
+     * change still recreates the activity to resolve its text resources again.
      *
      * When it does rebuild, the latched modifiers have to be carried across by
      * hand: the toggle map lives on [KeyPageAdapter] and the replacement starts
@@ -731,11 +754,27 @@ class ExtraKeyRow @JvmOverloads constructor(
         // nothing else still moves the key out from under it.
         longPressPopup?.dismiss()
         longPressPopup = null
+        val densityChanged = densityDpi != newConfig.densityDpi
+        densityDpi = newConfig.densityDpi
         val repacked = KeyPages.forSmallestWidthDp(newConfig.smallestScreenWidthDp)
-        if (repacked == pages) return
+        if (repacked == pages && !densityChanged) return
+        val selectedPage = viewPager.currentItem
         pages = repacked
+        if (densityChanged) {
+            viewPager.layoutParams.height = dpToPx(PAGER_HEIGHT_DP)
+            modifierBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            val metrics = modifierBadge.paint.fontMetricsInt
+            dotContainer.minimumHeight = maxOf(dpToPx(DOT_SIZE_DP), metrics.descent - metrics.ascent)
+            dotContainer.layoutParams = (dotContainer.layoutParams as LayoutParams).apply {
+                topMargin = dpToPx(2)
+                bottomMargin = dpToPx(4)
+            }
+        }
         setupAdapter()
         setupDots()
+        viewPager.setCurrentItem(selectedPage.coerceAtMost(pages.lastIndex), false)
+        requestLayout()
+        ViewCompat.requestApplyInsets(this)
         Logger.d(tag, "Repacked into ${pages.size} pages for ${newConfig.smallestScreenWidthDp}dp")
     }
 
@@ -842,6 +881,42 @@ internal fun latchedModifierLabel(ctrl: Boolean, alt: Boolean, shift: Boolean): 
         if (shift) add("shift")
     }
     return if (held.isEmpty()) null else held.joinToString("+")
+}
+
+/**
+ * The modifiers one press of a row key carries: its own when it has [fixed]
+ * ones, the row's [latched] ones otherwise.
+ *
+ * A shortcut key does not take the latches, not even to add to its own. They
+ * are on page 1, a swipe away from the page the shortcuts are on, and a latch
+ * left lit there would turn a shortcut into a chord nothing is bound to: Alt
+ * over Ctrl+S, or Shift over Ctrl+P, which is Ctrl+Shift+P and opens the Command
+ * Palette instead of Go to File. The press clears the latches afterwards, as any
+ * key's does.
+ *
+ * Split out of [ExtraKeyRow] for the reason [latchedModifierLabel] is: the row is
+ * a `View` whose initialiser reaches resources, so this is the half a JVM test
+ * can run.
+ */
+internal fun pressModifiers(fixed: KeyModifiers?, latched: KeyModifiers): KeyModifiers =
+    fixed ?: latched
+
+/**
+ * One press of a row key, delivered: [key] with the modifiers [pressModifiers]
+ * gives it, and a key with [fixed] modifiers, a shortcut, at the workbench
+ * rather than at the focused element (see [KeyInjector.injectKey]).
+ *
+ * Every other key keeps the route it had: the latched modifiers, and the focused
+ * element as the target, which is where a chord from page 1 has to land.
+ *
+ * Split out of [ExtraKeyRow] for the reason [pressModifiers] is, so that where a
+ * key lands can be run on the JVM.
+ */
+internal fun sendKeyPress(injector: KeyInjector?, key: String, fixed: KeyModifiers?, latched: KeyModifiers) {
+    val sent = pressModifiers(fixed, latched)
+    injector?.injectKey(
+        key, ctrlKey = sent.ctrl, altKey = sent.alt, shiftKey = sent.shift, toWorkbench = fixed != null,
+    )
 }
 
 /**

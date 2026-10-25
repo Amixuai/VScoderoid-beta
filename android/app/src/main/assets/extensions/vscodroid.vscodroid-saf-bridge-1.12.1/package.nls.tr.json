@@ -15,5 +15,6 @@
   "command.uiScale": "VSCodroid: Arayüz ölçeği",
   "command.about": "VSCodroid: Hakkında",
   "command.copyBugReport": "VSCodroid: Hata raporunu kopyala",
-  "viewsWelcome.explorer.deviceFolder": "Documents veya Download içindeki bir klasör gibi cihaz depolamasındaki bir klasörde çalışmak için, diğer uygulamaların oraya kaydettiği dosyaların da görünmesi amacıyla klasörü cihazdan açın.\n[Cihazdan klasör aç](command:vscodroid.openFolderFromDevice)"
+  "viewsWelcome.explorer.deviceFolder": "Documents veya Download içindeki bir klasör gibi cihaz depolamasındaki bir klasörde çalışmak için, diğer uygulamaların oraya kaydettiği dosyaların da görünmesi amacıyla klasörü cihazdan açın.\n[Cihazdan klasör aç](command:vscodroid.openFolderFromDevice)",
+  "command.runFile": "VSCodroid: Dosyayı çalıştır"
 }

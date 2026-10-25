@@ -32,14 +32,30 @@ class KeyInjector(
      * [NAVIGATION_KEYS] says why the trackpad's Up and Down, Tab and Escape
      * stay there. Either way the modifiers a press carried come up after it,
      * on the same route ([modifierReleases] says why).
+     *
+     * [toWorkbench] is for a key that is a shortcut for a workbench command, not
+     * a key for whatever has focus. It is always announced, never typed or
+     * pressed, and at the page's body instead of the focused element. The
+     * workbench resolves a binding in the context of the element the event
+     * lands on, and the terminal hands it only the commands on its skip list,
+     * turning every other key, Ctrl+B and Ctrl+S among them, into input for the
+     * shell. At the body no widget has a handler to take the key, and the
+     * listener the workbench keeps on the window resolves it in its root
+     * context wherever focus is. Read from the 1.139.1 workbench's terminal key
+     * handler and keybinding service; not measured on a device.
      */
     fun injectKey(
         key: String,
         ctrlKey: Boolean = false,
         altKey: Boolean = false,
         shiftKey: Boolean = false,
-        metaKey: Boolean = false
+        metaKey: Boolean = false,
+        toWorkbench: Boolean = false
     ) {
+        if (toWorkbench) {
+            announceKeystroke(key, ctrlKey, altKey, shiftKey, metaKey, toWorkbench = true)
+            return
+        }
         // A latched Shift changes WHICH character is typed, not whether it is
         // typed. The row offers no other route to `?`, `+`, `}` and the rest,
         // so resolving it here is what makes those reachable at all.
@@ -106,7 +122,8 @@ class KeyInjector(
         ctrlKey: Boolean,
         altKey: Boolean,
         shiftKey: Boolean,
-        metaKey: Boolean
+        metaKey: Boolean,
+        toWorkbench: Boolean = false
     ) {
         val keyDef = KeyMapping.getKeyDefOrLetter(key)
         // Quoted by [KeyMapping.jsQuote], which is the table's own escaper and
@@ -126,11 +143,14 @@ class KeyInjector(
         val jsCode = KeyMapping.jsQuote(keyDef.code)
         // Force shiftKey=true for characters that require Shift on a physical keyboard
         val effectiveShift = shiftKey || keyDef.requiresShift
+        // Where the keystroke lands. See injectKey for the one case that is not
+        // the focused element.
+        val dispatchAt = if (toWorkbench) "document.body" else "document.activeElement || document.body"
 
         val js = """
             (function() {
                 $RELEASE_MODIFIERS_JS
-                var target = document.activeElement || document.body;
+                var target = $dispatchAt;
                 var eventInit = {
                     key: ${jsKey},
                     code: ${jsCode},
@@ -353,6 +373,12 @@ class KeyInjector(
      * `textupdate` too, so the empty one takes it the same way, and built in,
      * Gboard 12.4 on the same emulator committed the letter over the empty
      * EditContext rather than composing it.
+     * A host that takes focus after the latch was set is lent one too, a task
+     * after the focus change. Measured on an API 33 emulator with WebView 153 and
+     * Gboard 12.4: Ctrl latched with focus in the Search box or in the terminal,
+     * then a tap into the editor and `p`, opened Quick Open with no `p` in the
+     * file; before, from the Search box, the editor took the `p` and the latch
+     * was spent with no chord.
      * A Backspace finds nothing to delete in it, so Gboard sends that as a key
      * press, which the editor bound to a plain Backspace with the latch still
      * on; measured on the same emulator, Ctrl then Backspace deleted one
@@ -803,6 +829,13 @@ class KeyInjector(
                     }
                 }
                 function takeNextCharacter() {
+                    // Already lent to the host that has focus: lending again
+                    // would only restart its input. It is also what makes the
+                    // focus listener below safe to run for the restarts made
+                    // here, which are focus moves into the host as far as it can
+                    // tell.
+                    if (lent && lent.host === document.activeElement &&
+                        lent.host.editContext === lent.empty) return;
                     // A host that has gone from the page, or lost focus without
                     // telling, still has the empty one.
                     giveBack();
@@ -814,6 +847,10 @@ class KeyInjector(
                     if (composingContexts.has(host.editContext)) {
                         host.blur();
                         host.focus();
+                        // An empty commit ends a composition with no compositionend,
+                        // and the blur has nothing left to end then, so the mark
+                        // would stand and restart input at every later latch.
+                        composingContexts.delete(host.editContext);
                     }
                     var empty = new EditContext();
                     // Kept from the composition hook above, which a blur and
@@ -864,6 +901,18 @@ class KeyInjector(
                     setTimeout(function() {
                         if (lent && document.activeElement !== lent.host) giveBack();
                     }, 0);
+                }, true);
+                // A host that takes focus while the latch is already held. The
+                // swap is made for the host that has focus when the latch is set,
+                // so one focused afterwards had nothing lent: a composing
+                // keyboard typed the letter into the editor and spent the latch
+                // with no chord. Scheduled for the same reason as the swap
+                // above, a task after the focus change, and not for a host it has
+                // lent already, which a blur and focus in one task leaves lent.
+                document.addEventListener('focusin', function(e) {
+                    if (!(held.ctrl || held.alt) || !e.target || !e.target.editContext ||
+                        (lent && lent.host === e.target)) return;
+                    setTimeout(takeNextCharacter, 0);
                 }, true);
                 // A keyboard's Backspace over the empty EditContext. With
                 // nothing before the caret there to delete, Gboard sends it as

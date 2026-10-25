@@ -243,6 +243,13 @@ done
 BINARIES+=']'
 SCRIPT_WRAPPERS+='}'
 
+# RUBYOPT=-rrubygems: the interpreter starts without RubyGems. Measured elsewhere on an
+# API 33 emulator with the pristine Termux libruby as well as the patched one:
+# `defined?(Gem)` is nil, so `require "sinatra"` raised LoadError for a gem `gem install`
+# had just put in GEM_HOME, while `gem` and `bundle` worked because they require rubygems
+# themselves. `-rrubygems` loads it first. Installs made before this line get it from
+# ToolchainManager.backfillToolchainEnvSync; the env file adds it to a RUBYOPT the caller
+# already has instead of replacing it.
 cat > "$PACK_ASSETS/toolchain_ruby.json" << EOF
 {
     "name": "ruby",
@@ -252,7 +259,8 @@ cat > "$PACK_ASSETS/toolchain_ruby.json" << EOF
     "env": {
         "GEM_HOME": "\$HOME/.gem/ruby",
         "GEM_PATH": "\$HOME/.gem/ruby:\$FILESDIR/usr/lib/ruby/gems",
-        "RUBYLIB": "\$FILESDIR/usr/lib/ruby/$RUBY_MINOR:\$FILESDIR/usr/lib/ruby/$RUBY_MINOR/aarch64-linux-android"
+        "RUBYLIB": "\$FILESDIR/usr/lib/ruby/$RUBY_MINOR:\$FILESDIR/usr/lib/ruby/$RUBY_MINOR/aarch64-linux-android",
+        "RUBYOPT": "-rrubygems"
     },
     "pathDirs": ["usr/bin"],
     "installRoot": "usr/lib/ruby",

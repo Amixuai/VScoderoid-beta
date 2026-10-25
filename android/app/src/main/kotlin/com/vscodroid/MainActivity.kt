@@ -12,6 +12,7 @@ import android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE
 import android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL
 import android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Typeface
 import android.os.Bundle
 import android.net.Uri
@@ -22,6 +23,7 @@ import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.text.util.Linkify
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
@@ -64,6 +66,8 @@ import com.vscodroid.bridge.AuthTabWindow
 import com.vscodroid.bridge.ClipboardBridge
 import com.vscodroid.bridge.SecurityManager
 import com.vscodroid.keyboard.ExtraKeyRow
+import com.vscodroid.keyboard.HardwareTyping
+import com.vscodroid.keyboard.KeyboardDismissal
 import com.vscodroid.keyboard.KeyInjector
 import com.vscodroid.service.NodeService
 import com.vscodroid.service.StartupNotice
@@ -118,6 +122,24 @@ class MainActivity : AppCompatActivity() {
 
     private var webView: WebView? = null
     private var extraKeyRow: ExtraKeyRow? = null
+    private val keyboardHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * What the page is told when the keyboard goes away, held back for a moment:
+     * see [KeyboardDismissal] for why a turn of the phone must not reach it.
+     */
+    private val keyboardDismissal = KeyboardDismissal(
+        schedule = { task, delayMs -> keyboardHandler.postDelayed(task, delayMs) },
+        cancel = { task -> keyboardHandler.removeCallbacks(task) },
+        now = { SystemClock.uptimeMillis() },
+        imeVisible = { extraKeyRow?.imeVisible == true },
+        onDismissed = {
+            webView?.evaluateJavascript(
+                "if (window.__vscodroidKeyboardDismissed) window.__vscodroidKeyboardDismissed();",
+                null,
+            )
+        },
+    )
 
     /**
      * The bound service, or null while nothing is bound.
@@ -1008,6 +1030,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        keyboardDismissal.release()
         // Detached, because the wait it contains buys this teardown nothing.
         // SafSyncEngine.stopWatching stops the observers first and then joins the
         // write-back worker for up to two seconds, and the interrupt cannot
@@ -2398,9 +2421,11 @@ class MainActivity : AppCompatActivity() {
         // is up, which is the one state where moving focus resizes the window.
         // The keyboard guard holds the keyboard down again once it has gone.
         extraKeyRow?.onImeVisibilityChanged = { visible ->
-            val dismissed = if (visible) "" else
-                " if (window.__vscodroidKeyboardDismissed) window.__vscodroidKeyboardDismissed();"
-            webView?.evaluateJavascript("window.__vscodroidImeVisible = $visible;$dismissed", null)
+            webView?.evaluateJavascript("window.__vscodroidImeVisible = $visible;", null)
+            // Held back and checked again, so a turn of the phone, which reports the
+            // keyboard hidden and visible again within a moment, does not put the
+            // page's editor into the "keyboard put away" state (KeyboardDismissal).
+            if (!visible) keyboardDismissal.hidden()
         }
     }
 
@@ -2478,7 +2503,60 @@ class MainActivity : AppCompatActivity() {
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val handled = super.dispatchKeyEvent(event)
+        noteHardwareTyping(event)
         return handled || event.keyCode == KeyEvent.KEYCODE_ESCAPE
+    }
+
+    /**
+     * Takes the extra key row off the screen while the user types on a hardware
+     * keyboard, from the key as it went by and after it was delivered, so nothing
+     * about the key itself changes. Which keys count is [HardwareTyping]'s; the
+     * row comes back when a finger has been on the screen ([dispatchTouchEvent]) or
+     * when the keyboard is no longer there ([onConfigurationChanged]).
+     */
+    private fun noteHardwareTyping(event: KeyEvent) {
+        if (event.action != KeyEvent.ACTION_DOWN) return
+        val device = event.device ?: return
+        if (HardwareTyping.isTypingOnHardwareKeyboard(
+                isVirtual = device.isVirtual,
+                source = event.source,
+                keyboardType = device.keyboardType,
+                isPrintingKey = event.isPrintingKey,
+            )
+        ) {
+            extraKeyRow?.hiddenForHardwareKeyboard = true
+        }
+    }
+
+    /**
+     * Gives the extra key row back when a finger leaves the screen after a run of
+     * typing on a hardware keyboard. At the lift and after the event was delivered:
+     * the row takes its height out of the page, and a tap is placed on the page as it
+     * is when the finger lifts. A mouse click or a touchpad is not a way back to the
+     * soft keyboard, and [HardwareTyping.isScreenTouch] leaves those out.
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        val handled = super.dispatchTouchEvent(ev)
+        if (ev.actionMasked == MotionEvent.ACTION_UP && HardwareTyping.isScreenTouch(ev.source)) {
+            extraKeyRow?.hiddenForHardwareKeyboard = false
+        }
+        return handled
+    }
+
+    /**
+     * The manifest's `configChanges` keeps the activity across a turn of the phone,
+     * a resize or a fold, so this is where one is seen. The keyboard is reported
+     * hidden with it and comes back by itself, and [keyboardDismissal] must not
+     * hold the page's editor down for that.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        keyboardDismissal.turned()
+        // The keyboard the extra key row stood aside for is gone (a Bluetooth one
+        // asleep or unpaired) and the soft keyboard is what is left.
+        if (newConfig.keyboard == Configuration.KEYBOARD_NOKEYS) {
+            extraKeyRow?.hiddenForHardwareKeyboard = false
+        }
     }
 
     private fun requestNotificationPermission() {
@@ -3100,7 +3178,12 @@ class MainActivity : AppCompatActivity() {
             onToggleExtraKeyRow = {
                 val hidden = !workspacePrefs.getBoolean(KEY_EXTRA_KEY_ROW_HIDDEN, false)
                 workspacePrefs.edit { putBoolean(KEY_EXTRA_KEY_ROW_HIDDEN, hidden) }
-                runOnUiThread { extraKeyRow?.hiddenByUser = hidden }
+                runOnUiThread {
+                    extraKeyRow?.hiddenByUser = hidden
+                    // Asked for by name, so the row is not held back by the stand-aside
+                    // a run of typing on a hardware keyboard put on it.
+                    if (!hidden) extraKeyRow?.hiddenForHardwareKeyboard = false
+                }
                 hidden
             },
             safManager = safManager,
@@ -3664,6 +3747,8 @@ class MainActivity : AppCompatActivity() {
         injectKeyboardGuard()
         // Keeps a context menu open while the keyboard is up, and Escape able to close it
         injectTouchContextMenu()
+        // Lets a finger drag the caret
+        injectCaretDrag()
         // Keeps an inline list edit (New File, Rename) in view when the keyboard rises
         injectListEditKeeper()
         // Makes Enter on the soft keyboard commit an inline edit or a Quick Open pick,
@@ -4474,6 +4559,10 @@ class MainActivity : AppCompatActivity() {
                     pendingTap = null;
                     // A scroll leaves the keyboard where it was, which is down.
                     if (travelled > TAP_SLOP) return;
+                    // A caret drag of a character or two travels no further than a tap
+                    // does. injectCaretDrag marks the touch it takes, and a touch that
+                    // moved the caret is not a request for the keyboard.
+                    if (window.__vscodroidCaretDragged) return;
                     // So does a long press, which asked for a menu and not a
                     // keyboard. Both event timestamps come from the same clock,
                     // so this is a duration and not a wall-clock read.
@@ -4962,6 +5051,377 @@ class MainActivity : AppCompatActivity() {
                 document.querySelectorAll('.shadow-root-host').forEach(function(h) {
                     if (h.shadowRoot) adopt(h.shadowRoot);
                 });
+            })();
+            """.trimIndent(),
+            null
+        )
+    }
+
+    /**
+     * Lets a finger drag the caret: touch within reach of it, drag sideways, and it
+     * follows, and the text scrolls when the finger comes to the editor's edge.
+     *
+     * Dragging in the editor otherwise only scrolls it, and the editor puts a caret
+     * down only for a tap, so moving it a few characters meant tapping again and again
+     * or reaching for the trackpad on the key row.
+     *
+     * Which touch is a caret drag is decided at its first movement, never at its
+     * start, so a tap, a long press that stays put and a scroll go on as before:
+     *  - it is a finger. A stylus's drag is already a selection in the editor;
+     *  - the touch went down on the text, within `GRAB_X` either side of the caret,
+     *    `GRAB_UP` above it and `GRAB_DOWN` below. More room below, so a finger under
+     *    the line keeps the caret in sight, and it keeps that distance for the whole
+     *    drag. A touch on something over the text, a menu item or a suggestion, is
+     *    left alone;
+     *  - the editor has one caret and nothing selected. With a selection or several
+     *    cursors a drag would throw them away;
+     *  - the first movement is sideways. Up or down first is how the editor scrolls,
+     *    and a finger that goes down on the caret to scroll still does.
+     * A long press that creeps sideways before it is lifted is a drag too, where the
+     * editor would have opened its menu for it.
+     *
+     * From then on the touch is the script's: its moves are cancelled and kept from the
+     * editor, whose own gesture would scroll, and so is its lift, which the editor
+     * would take for a tap where it went down. A second finger that lands meanwhile is
+     * kept from the editor too, or its lift would be read as a tap. The editor redraws
+     * its lines as the text scrolls, and a touch whose first element has gone out of
+     * the page stops reaching the page's touch listeners, moves and lift both, while
+     * the pointer events carry on (measured: a drag held at the lower edge lost its
+     * touchend about one run in two). So the drag is also followed and ended from the
+     * pointer events, and a touchend that still arrives afterwards is kept from the
+     * editor as well. Those pointer moves are kept from it too, because it reads them as
+     * a mouse over its text and opens the hover of the word the finger rests on, a box
+     * that covers the code being dragged over.
+     *
+     * The keyboard guard reads a touch that ends within a few pixels of where it began,
+     * and soon, as a tap, and raises a keyboard it was holding down. A drag of a
+     * character or two is that short, so from the moment it is taken until the next
+     * touch it is marked in `window.__vscodroidCaretDragged`, and the guard lets the
+     * touch go by.
+     *
+     * The caret is moved the way a finger moves it, by the editor's own tap
+     * (`-monaco-gesturetap`, which the lines listen for on their content node)
+     * dispatched at the point the finger is at, less the distance it was from the caret
+     * when it went down. That keeps the keyboard guard in step, because it listens for
+     * the same event to end a composing word, and it asks nothing of the editor that a
+     * tap does not. One tap per animation frame, and none for a finger that has not
+     * moved. Within `EDGE` of the editor's edge a wheel event scrolls it, faster the
+     * nearer the edge and by the time a frame took, so a 120 Hz screen is not twice as
+     * quick. The scrolling rests when the text stops moving and starts again when the
+     * finger does. A finger that goes down inside a band, on the last line say, may run
+     * along it: it scrolls toward that edge only once it has been out of the band or has
+     * moved `ARM` toward the edge. An editor smaller than `MIN_EDGE_SIZE`, the four
+     * lines a phone in landscape leaves with the keyboard up, does not scroll at all,
+     * because the bands would cover every line. The wheel event goes to the editor's root, where the editor listens,
+     * and does not bubble: an editor with nothing to scroll that does not keep a wheel
+     * for itself, such as the commit message box or a notebook cell, would pass it up to
+     * the list around it. That event is not trusted and the editor scrolls the opposite
+     * way to its delta, measured, which is why the signs are reversed.
+     *
+     * The point a tap is aimed at is the first element under it that belongs to the
+     * lines, because the sash on the editor's lower edge is on top of the last pixels
+     * and a tap at one of them found nothing.
+     *
+     * Measured on an API 36 emulator (WebView 134) with `adb shell input`: a sideways
+     * drag from the caret moved it to within one character of the finger, a drag across
+     * wrapped lines landed on the line under the finger less the grab distance, the
+     * text scrolled with the caret following at either edge, the keyboard stayed down
+     * for a drag begun with it down and up for one begun with it up, a tap beside the
+     * caret still placed it, a drag begun upward scrolled and claimed nothing, a long
+     * press on the caret opened the editor menu, and a drag with a word selected did
+     * nothing. Not measured: a finger, which is what decides whether the grab distances
+     * and the edge speed feel right, a stylus, a word still composing, and an editor in
+     * a notebook or the commit message box.
+     *
+     * `CaretDragWiringTest` holds the script to where it is installed and to the
+     * names it takes from the workbench, and `scripts/test-caret-drag.js` runs it.
+     */
+    private fun injectCaretDrag() {
+        webView?.evaluateJavascript(
+            """
+            (function() {
+                if (window.__vscodroidCaretDrag) return;
+                window.__vscodroidCaretDrag = true;
+                // How far from the caret a touch may go down and still hold it, in CSS px.
+                var GRAB_X = 24;
+                var GRAB_UP = 8;
+                var GRAB_DOWN = 40;
+                // The travel that tells a drag from a press.
+                var START_TRAVEL = 4;
+                // Within EDGE of the editor's edge the text scrolls, by up to EDGE_SPEED wheel
+                // units a 60 Hz frame. INSET keeps the aim off the sash on the edge.
+                var EDGE = 32;
+                var EDGE_SPEED = 12;
+                var INSET = 8;
+                // An editor smaller than this has no room for the bands: they would cover every
+                // line, and a finger on any of them would scroll the text away.
+                var MIN_EDGE_SIZE = 104;
+                // A finger that goes down inside a band may run along it. It scrolls toward that
+                // edge once it has been out of the band, or has moved this far toward the edge.
+                var ARM = 16;
+                // Scrolling frames in a row with the text where it was, after which the
+                // scrolling rests until the finger moves: there is nothing more to scroll.
+                var STILL_FRAMES = 4;
+
+                var root = document.documentElement;
+                var style = document.createElement('style');
+                style.id = 'vscodroid-caret-drag-css';
+                style.textContent = '.vscodroid-caret-drag .monaco-editor.focused .cursors-layer > .cursor { ' +
+                    'box-shadow: 0 0 0 3px var(--vscode-editorCursor-foreground, #aeafad); }';
+                document.head.appendChild(style);
+
+                var drag = null;
+                // The pointer that went down last, and what it is, for the touch that follows it.
+                var lastPointer = -1;
+                var lastPointerType = '';
+                // The touch whose drag a pointer event ended, while its own touchend may still
+                // arrive and has to be kept from the editor.
+                var finished = -1;
+                window.__vscodroidCaretDragged = false;
+
+                function touchOf(list, id) {
+                    for (var i = 0; i < list.length; i++) {
+                        if (list[i].identifier === id) return list[i];
+                    }
+                    return null;
+                }
+
+                function clamp(value, low, high) {
+                    return Math.min(Math.max(value, low), high);
+                }
+
+                function tapAt(x, y) {
+                    var stack = document.elementsFromPoint(x, y);
+                    var el = null;
+                    for (var i = 0; i < stack.length; i++) {
+                        if (drag.lines.contains(stack[i])) {
+                            el = stack[i];
+                            break;
+                        }
+                    }
+                    if (!el) return;
+                    var ev = document.createEvent('CustomEvent');
+                    ev.initEvent('-monaco-gesturetap', false, true);
+                    ev.initialTarget = el;
+                    ev.tapCount = 1;
+                    ev.pageX = x;
+                    ev.pageY = y;
+                    ev.clientX = x;
+                    ev.clientY = y;
+                    ev.translationX = 0;
+                    ev.translationY = 0;
+                    drag.lines.dispatchEvent(ev);
+                }
+
+                function edgeStep(pos, low, high, armedLow, armedHigh) {
+                    if (armedLow && pos < low + EDGE) return -EDGE_SPEED * Math.min(1, (low + EDGE - pos) / EDGE);
+                    if (armedHigh && pos > high - EDGE) return EDGE_SPEED * Math.min(1, (pos - (high - EDGE)) / EDGE);
+                    return 0;
+                }
+
+                // Which edges the finger may scroll toward, see ARM.
+                function armEdges(at) {
+                    var armed = drag.armed;
+                    var box = at.box;
+                    if (at.y >= box.top + EDGE || drag.y0 - drag.y >= ARM) armed.top = true;
+                    if (at.y <= box.bottom - EDGE || drag.y - drag.y0 >= ARM) armed.bottom = true;
+                    if (at.x >= box.left + EDGE || drag.x0 - drag.x >= ARM) armed.left = true;
+                    if (at.x <= box.right - EDGE || drag.x - drag.x0 >= ARM) armed.right = true;
+                }
+
+                // The finger, kept inside the editor, and the editor's box.
+                function where() {
+                    var box = drag.scroller.getBoundingClientRect();
+                    return {
+                        box: box,
+                        x: clamp(drag.x, box.left + 1, box.right - 1),
+                        y: clamp(drag.y, box.top + 1, box.bottom - 1)
+                    };
+                }
+
+                // Puts the caret where the finger is, less the distance it began from it, and
+                // off the sash on the editor's edge.
+                function aim(at, force) {
+                    var x = clamp(at.x - drag.offX, at.box.left + 1, at.box.right - 1);
+                    var y = clamp(at.y - drag.offY, at.box.top + INSET, at.box.bottom - INSET);
+                    if (force || x !== drag.lastX || y !== drag.lastY) {
+                        drag.lastX = x;
+                        drag.lastY = y;
+                        tapAt(x, y);
+                    }
+                }
+
+                function frame(now) {
+                    if (!drag || !drag.claimed) return;
+                    drag.frame = 0;
+                    var at = where();
+                    armEdges(at);
+                    var armed = drag.armed;
+                    var sx = at.box.width < MIN_EDGE_SIZE ? 0 :
+                        edgeStep(at.x, at.box.left, at.box.right, armed.left, armed.right);
+                    var sy = at.box.height < MIN_EDGE_SIZE ? 0 :
+                        edgeStep(at.y, at.box.top, at.box.bottom, armed.top, armed.bottom);
+                    var scrolling = sx !== 0 || sy !== 0;
+                    if (scrolling) {
+                        var text = drag.lines.getBoundingClientRect();
+                        drag.still = text.left === drag.textLeft && text.top === drag.textTop ? drag.still + 1 : 0;
+                        drag.textLeft = text.left;
+                        drag.textTop = text.top;
+                        var scale = drag.at && now ? clamp((now - drag.at) / 16.7, 0.25, 3) : 1;
+                        drag.at = now || 0;
+                        // Dispatched on the editor's root and not bubbling, see the KDoc.
+                        drag.editor.dispatchEvent(new WheelEvent('wheel', {
+                            deltaX: -sx * scale, deltaY: -sy * scale, deltaMode: 0,
+                            bubbles: false, cancelable: true, clientX: at.x, clientY: at.y
+                        }));
+                    } else {
+                        drag.at = 0;
+                        drag.still = 0;
+                        drag.textLeft = undefined;
+                        drag.textTop = undefined;
+                    }
+                    aim(at, scrolling);
+                    if (scrolling && drag.still < STILL_FRAMES) drag.frame = requestAnimationFrame(frame);
+                }
+
+                function follow(x, y) {
+                    drag.x = x;
+                    drag.y = y;
+                    drag.still = 0;
+                    if (!drag.frame) drag.frame = requestAnimationFrame(frame);
+                }
+
+                function endDrag() {
+                    if (drag.frame) cancelAnimationFrame(drag.frame);
+                    drag.frame = 0;
+                    root.classList.remove('vscodroid-caret-drag');
+                }
+
+                // The end of a taken drag, from whichever event reports it first. The editor
+                // redraws its lines as the text scrolls, and a touch whose first element has
+                // gone out of the page stops reaching the page's touch listeners: measured, the
+                // moves and the touchend stopped while the pointer events carried on.
+                function finish(commit) {
+                    var done = drag;
+                    if (done.frame) cancelAnimationFrame(done.frame);
+                    done.frame = 0;
+                    if (commit) aim(where(), false);
+                    endDrag();
+                    finished = done.id;
+                    drag = null;
+                }
+
+                window.addEventListener('pointerdown', function(e) {
+                    if (drag && drag.claimed) return;
+                    lastPointer = e.pointerId;
+                    lastPointerType = e.pointerType;
+                    finished = -1;
+                    window.__vscodroidCaretDragged = false;
+                }, true);
+
+                window.addEventListener('touchstart', function(e) {
+                    if (drag && drag.claimed) {
+                        // A second finger, while one drags: the editor is not told of it, so
+                        // it cannot read its lift as a tap.
+                        if (e.touches.length > 1) {
+                            e.stopImmediatePropagation();
+                            return;
+                        }
+                        // A lone touch: the last drag's lift never came.
+                        endDrag();
+                    }
+                    drag = null;
+                    if (e.touches.length !== 1 || lastPointerType !== 'touch') return;
+                    var t = e.touches[0];
+                    var editor = document.querySelector('.monaco-editor.focused');
+                    if (!editor) return;
+                    var lines = editor.querySelector('.lines-content');
+                    if (!lines || !lines.contains(e.target)) return;
+                    var carets = editor.querySelectorAll('.cursors-layer > .cursor');
+                    if (carets.length !== 1 || editor.querySelector('.selected-text')) return;
+                    var r = carets[0].getBoundingClientRect();
+                    if (!r.height) return;
+                    if (t.clientX < r.left - GRAB_X || t.clientX > r.right + GRAB_X ||
+                        t.clientY < r.top - GRAB_UP || t.clientY > r.bottom + GRAB_DOWN) return;
+                    drag = {
+                        id: t.identifier, pointer: lastPointer, editor: editor, lines: lines,
+                        x0: t.clientX, y0: t.clientY,
+                        offX: t.clientX - r.left, offY: t.clientY - (r.top + r.height / 2),
+                        claimed: false, frame: 0, x: t.clientX, y: t.clientY, lastX: -1, lastY: -1,
+                        at: 0, still: 0, textLeft: undefined, textTop: undefined,
+                        armed: { top: false, bottom: false, left: false, right: false }
+                    };
+                }, { capture: true, passive: true });
+
+                window.addEventListener('touchmove', function(e) {
+                    if (!drag) return;
+                    var t = touchOf(e.touches, drag.id);
+                    if (!drag.claimed) {
+                        if (!t || e.touches.length !== 1) {
+                            drag = null;
+                            return;
+                        }
+                        var dx = t.clientX - drag.x0;
+                        var dy = t.clientY - drag.y0;
+                        if (Math.max(Math.abs(dx), Math.abs(dy)) < START_TRAVEL) return;
+                        if (Math.abs(dy) > Math.abs(dx)) {
+                            drag = null;
+                            return;
+                        }
+                        var scroller = drag.editor.querySelector('.monaco-scrollable-element');
+                        if (!scroller) {
+                            drag = null;
+                            return;
+                        }
+                        drag.scroller = scroller;
+                        drag.claimed = true;
+                        window.__vscodroidCaretDragged = true;
+                        root.classList.add('vscodroid-caret-drag');
+                    }
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    if (t) follow(t.clientX, t.clientY);
+                }, { capture: true, passive: false });
+
+                window.addEventListener('pointermove', function(e) {
+                    if (!drag || e.pointerId !== drag.pointer) return;
+                    // Not the editor's: it would show the hover of the word under the finger.
+                    e.stopPropagation();
+                    if (drag.claimed) follow(e.clientX, e.clientY);
+                }, true);
+
+                function pointerEnded(e) {
+                    if (!drag || !drag.claimed || e.pointerId !== drag.pointer) return;
+                    finish(e.type === 'pointerup');
+                }
+                window.addEventListener('pointerup', pointerEnded, true);
+                window.addEventListener('pointercancel', pointerEnded, true);
+
+                function lifted(e) {
+                    // The touchend of a drag a pointer event already ended.
+                    if (finished !== -1 && touchOf(e.changedTouches, finished)) {
+                        finished = -1;
+                        if (e.type === 'touchend') {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                        }
+                        return;
+                    }
+                    if (!drag || !touchOf(e.changedTouches, drag.id)) return;
+                    if (!drag.claimed) {
+                        drag = null;
+                        return;
+                    }
+                    finish(e.type === 'touchend');
+                    // The editor was never told this touch moved, so it would read the lift
+                    // as a tap where it went down.
+                    if (e.type === 'touchend') {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                    }
+                }
+                window.addEventListener('touchend', lifted, { capture: true, passive: false });
+                window.addEventListener('touchcancel', lifted, true);
             })();
             """.trimIndent(),
             null

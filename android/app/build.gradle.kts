@@ -640,6 +640,13 @@ tasks.withType<Test> {
     inputs.file(rootProject.projectDir.parentFile.resolve("scripts/build-vscode-oss.sh"))
         .withPropertyName("codeOssBuildScript")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // CaretDragWiringTest holds the caret-drag self-check to the two workflows that run it.
+    inputs.files(
+        rootProject.projectDir.parentFile.resolve(".github/workflows/lint.yml"),
+        rootProject.projectDir.parentFile.resolve(".github/workflows/release.yml"),
+    )
+        .withPropertyName("selfCheckWorkflows")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     // The licence texts NoticesTest pins byte for byte. That pin exists for the
     // edit nobody means to make: a reflow, a re-wrap, an editor stripping the
     // form feeds out of COPYING.LGPLv2.1. Undeclared, the run that has to notice
